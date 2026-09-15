@@ -27,8 +27,8 @@ Every viewer sees only their own role's pages — there's no portal switcher, ju
 
 | Role | Email | Password | Pages |
 |---|---|---|---|
-| Student | `apvsanpedro@mymail.mapua.edu.ph` | `2023107394` | Active Requests, Notifications |
-| Student | `mefvocal@mymail.mapua.edu.ph` | `divinemike191` | Active Requests, Notifications |
+| Student | `apvsanpedro@mymail.mapua.edu.ph` | `aaron` | Active Requests, Notifications |
+| Student | `mefvocal@mymail.mapua.edu.ph` | `mike` | Active Requests, Notifications |
 | Staff | `staff@mymail.mapua.edu.ph` | `staff` | Intake Requests, Dean Decides |
 | Admin | `admin@mymail.mapua.edu.ph` | `admin` | System Overview, Account Management |
 
@@ -64,7 +64,7 @@ Because the backend is now Supabase (a real hosted service, not `localhost`), `i
    git push -u origin main
    ```
 5. On [vercel.com](https://vercel.com) → **Add New Project** → import that repo → Framework preset: **Other**, Build command: none, Output directory: `/` (root) → Deploy.
-6. On your laptop, `git clone https://github.com/<your-username>/<repo-name>.git` to get the exact same project — no manual file transfer needed. From either machine, `git pull` before you start working and `git add . && git commit -m "..." && git push` when you're done, and Vercel redeploys automatically on every push to `main`.
+6. On your laptop, `git clone https://github.com/AaronRonnie/docuroute-prototype.git` to get the exact same project — no manual file transfer needed. From either machine, `git pull` before you start working and `git add . && git commit -m "..." && git push` when you're done, and Vercel redeploys automatically on every push to `main`.
 
 **Option A — CLI (fastest, but doesn't give you a repo to clone):**
 ```
@@ -84,3 +84,10 @@ Two things in DocuRoute's design still need a real server process, not just Supa
 2. **The actual AI Processing Layer** (Section 3.10) — image rectification (OpenCV) + OCR (Tesseract) + layout-aware classification, replacing today's `Math.random()` confidence score.
 
 Render's free tier (a web service that sleeps after ~15 minutes idle, 750 free hours/month) is a solid fit for both: a small FastAPI service holding the service-role key for admin operations, and/or the Python AI microservice from Section 3.11's tools table, called from this page after a document lands in Supabase Storage. Supabase stays the database either way — Render would just run stateless code in front of it.
+
+Install Coding Agent Plugin
+
+
+Turn your coding agent into a Vercel expert. Simply copy and run this in your terminal to install the plugin. Available for Claude, Cursor and Codex.
+
+npx plugins add vercel/vercel-plugin
