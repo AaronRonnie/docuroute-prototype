@@ -1,0 +1,7 @@
+# Legacy local-only backend's data file — demo data with plaintext passwords,
+# regenerated automatically by server.ps1 if it's ever run again; not needed
+# now that Supabase is the real backend.
+server/db.json
+
+.DS_Store
+Thumbs.db

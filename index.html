@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuRoute Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<style>
+  :root{
+    --bg:#F7F5EF; --surface:#FFFFFF; --surface-2:#ECE8DD; --surface-3:#E1DDCF;
+    --ink:#20241F; --ink-soft:#5B6058; --ink-faint:#8B9088;
+    --accent:#181B16; --accent-strong:#000000; --btn-ink:#FFFFFF;
+    --brand:#1F3D2E; --brand-strong:#122318;
+    --good:#1F7A4D; --good-soft:#E1F2E7;
+    --current:#B5541F; --current-soft:#F6E6DA;
+    --bad:#C0392B; --bad-soft:#FBE3E1;
+    --line:#E4E1D5;
+    --shadow:0 1px 2px rgba(32,36,31,.05), 0 10px 26px -14px rgba(32,36,31,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14160F; --surface:#1B1E16; --surface-2:#242820; --surface-3:#2C3127;
+      --ink:#EDEBE2; --ink-soft:#B3B2A6; --ink-faint:#82877C;
+      --accent:#ECE8DD; --accent-strong:#FFFFFF; --btn-ink:#14160F;
+      --brand:#3FAF7B; --brand-strong:#6FCE9C;
+      --good:#5FBF8E; --good-soft:#1B2F22;
+      --current:#E08A4D; --current-soft:#3A2416;
+      --bad:#E5766B; --bad-soft:#3A201D;
+      --line:#31352A;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14160F; --surface:#1B1E16; --surface-2:#242820; --surface-3:#2C3127;
+    --ink:#EDEBE2; --ink-soft:#B3B2A6; --ink-faint:#82877C;
+    --accent:#ECE8DD; --accent-strong:#FFFFFF; --btn-ink:#14160F;
+    --brand:#3FAF7B; --brand-strong:#6FCE9C;
+    --good:#5FBF8E; --good-soft:#1B2F22;
+    --current:#E08A4D; --current-soft:#3A2416;
+    --bad:#E5766B; --bad-soft:#3A201D;
+    --line:#31352A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; height:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height:1.5;
+  }
+  h1,h2,h3{ font-family:"Lora", ui-serif, Georgia, serif; font-weight:600; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
+  button{ font:inherit; cursor:pointer; }
+  a{ color:inherit; }
+
+  /* ---- App shell: sidebar + content ---- */
+  .app-shell{ display:flex; min-height:100vh; align-items:stretch; }
+  .sidebar{
+    width:236px; flex:0 0 236px; background:var(--surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; z-index:20;
+  }
+  .sidebar-brand{ display:flex; align-items:center; gap:10px; padding:22px 20px; border-bottom:1px solid var(--line); }
+  .brand-mark{
+    width:32px; height:32px; border-radius:8px; background:var(--brand); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-family:"Lora",serif; font-weight:700; font-size:17px; flex:0 0 auto;
+  }
+  .brand-word{ font-family:"Lora",serif; font-weight:700; font-size:19px; color:var(--ink); }
+  .nav-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint); font-weight:600; padding:16px 12px 8px; }
+  .sidebar-nav{ padding:0 12px; }
+  .nav-item{
+    display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+    padding:10px 12px; border-radius:9px; font-size:14px; color:var(--ink-soft);
+    background:none; border:none; margin-bottom:2px;
+  }
+  .nav-item svg{ width:17px; height:17px; flex:0 0 auto; }
+  .nav-item:hover{ background:var(--surface-2); color:var(--ink); }
+  .nav-item.active{ background:var(--surface-2); color:var(--ink); font-weight:600; }
+  .sidebar-spacer{ flex:1; }
+  .conn-row{ display:flex; align-items:center; gap:8px; padding:0 20px 10px; font-size:11px; color:var(--ink-faint); }
+  .conn-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); flex:0 0 auto; }
+  .conn-dot.off{ background:var(--bad); }
+  .reset-link{ background:none; border:none; color:var(--ink-faint); font-size:11.5px; padding:0 20px 14px; text-align:left; text-decoration:underline; text-underline-offset:2px; }
+  .reset-link:hover{ color:var(--ink); }
+  .sidebar-foot{ border-top:1px solid var(--line); padding:14px 18px; display:flex; align-items:center; gap:10px; }
+  .avatar{
+    width:32px; height:32px; border-radius:50%; background:var(--brand); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; flex:0 0 auto;
+  }
+  .sidebar-foot .who{ flex:1; min-width:0; }
+  .sidebar-foot .name{ font-size:13.5px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-foot .portal{ font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em; }
+
+  .content{ flex:1; min-width:0; }
+  .content-header{ background:var(--surface); border-bottom:1px solid var(--line); padding:30px 40px 26px; }
+  .content-header h1{ font-size:26px; margin:0 0 6px; }
+  .content-header p{ margin:0; color:var(--ink-soft); font-size:14px; max-width:66ch; }
+  .content-header .badges{ display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  .content-body{ padding:28px 40px 80px; }
+
+  .count-badge{
+    display:inline-flex; align-items:center; gap:7px; background:var(--surface-2); color:var(--ink-soft);
+    font-size:12px; font-weight:600; padding:6px 10px 6px 12px; border-radius:999px;
+  }
+  .count-badge b{ background:var(--surface-3); color:var(--ink); border-radius:999px; padding:1px 7px; font-size:11.5px; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--accent); color:var(--btn-ink); border:none;
+    padding:10px 18px; border-radius:9px; font-size:14.5px; font-weight:600;
+  }
+  .btn:hover{ background:var(--accent-strong); }
+  .btn.secondary{ background:var(--surface); color:var(--ink); border:1px solid var(--line); }
+  .btn.secondary:hover{ border-color:var(--ink-faint); }
+  .btn.danger{ background:var(--bad); color:#fff; }
+  .btn.small{ padding:7px 12px; font-size:12.5px; border-radius:7px; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  /* ---- Stat tiles (Admin) ---- */
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:28px; }
+  .stat-tile{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 18px 16px; box-shadow:var(--shadow); }
+  .stat-tile .num{ font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; font-size:30px; font-weight:500; color:var(--ink); }
+  .stat-tile .lbl{ font-size:12.5px; color:var(--ink-faint); margin-top:4px; text-transform:uppercase; letter-spacing:.05em; }
+
+  /* ---- Cards / table ---- */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .qlist{ display:flex; flex-direction:column; }
+  .qrow{
+    display:grid; grid-template-columns:104px 1.15fr 1.1fr 68px 1fr 1.5fr 168px;
+    gap:14px; align-items:center; padding:15px 18px; border-top:1px solid var(--line);
+  }
+  .qrow:first-child{ border-top:none; }
+  .qrow.head{ background:var(--surface-2); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; }
+  .qrow .id{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-soft); font-weight:600; }
+  .qrow .who{ font-size:14px; }
+  .qrow .who .sub{ font-size:12px; color:var(--ink-faint); }
+  .qrow .age{ font-size:13px; color:var(--ink-soft); }
+  .qrow .loc{ font-size:13.5px; font-weight:600; }
+  .qrow .loc.warn{ color:var(--bad); }
+  .qrow .status-cell .cap{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; line-height:1.35; }
+  .qrow .actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  .empty{ padding:40px 20px; text-align:center; color:var(--ink-faint); font-size:14px; }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;
+    white-space:nowrap; border:1px solid transparent;
+  }
+  .pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.neutral{ background:var(--surface-2); color:var(--ink-soft); }
+  .pill.current{ background:var(--current-soft); color:var(--current); }
+  .pill.good{ background:var(--good-soft); color:var(--good); }
+  .pill.bad{ background:var(--bad-soft); color:var(--bad); }
+
+  /* ---- Section header row (title + badges) ---- */
+  .section-title{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; margin:26px 0 12px; display:flex; align-items:center; gap:10px; }
+
+  /* ---- "My Request" tab + stepper cards (Student) ---- */
+  .section-tab{
+    display:inline-flex; align-items:center; gap:10px; background:var(--surface-2); color:var(--ink-soft);
+    font-size:12px; text-transform:uppercase; letter-spacing:.07em; font-weight:600;
+    padding:11px 20px; border-radius:10px; margin-bottom:20px;
+  }
+  .section-tab .chev{ color:var(--ink-faint); font-size:11px; }
+
+  .req-step-card{ background:var(--surface-2); border-radius:18px; padding:20px 24px; margin-bottom:14px; }
+  .req-step-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:16px; }
+  .req-step-name{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; }
+  .req-step-name .title{ display:block; font-size:16px; text-transform:none; letter-spacing:0; color:var(--ink); font-family:"Lora",serif; font-weight:600; margin-bottom:3px; }
+  .req-step-name .id{ font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-faint); text-transform:none; letter-spacing:0; }
+  .info-btn{ background:var(--surface); border:1px solid var(--line); color:var(--ink-faint); border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .info-btn:hover{ color:var(--ink); border-color:var(--ink-faint); }
+  .info-btn svg{ width:15px; height:15px; }
+
+  .stepper{ display:flex; align-items:flex-start; padding:2px 4px 0; }
+  .step-node{ display:flex; flex-direction:column; align-items:center; gap:7px; flex:0 0 auto; }
+  .step-dot{ width:15px; height:15px; border-radius:50%; background:var(--ink-faint); border:2px solid var(--surface-2); }
+  .step-dot.done{ background:var(--good); }
+  .step-dot.current{ background:var(--current); }
+  .step-dot.bad{ background:var(--bad); }
+  .step-label{ font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint); white-space:nowrap; max-width:90px; overflow:hidden; text-overflow:ellipsis; }
+  .step-line{ flex:1 1 28px; height:2px; background:var(--surface-3); margin-top:7px; min-width:20px; }
+  .step-line.done{ background:var(--good); }
+
+  .req-step-foot{ display:flex; align-items:center; gap:12px; margin-top:16px; }
+  .req-step-meta{ font-size:12.5px; color:var(--ink-faint); }
+
+  /* ---- Modal ---- */
+  .overlay{ position:fixed; inset:0; background:rgba(20,22,15,.45); display:none; align-items:flex-start; justify-content:center; padding:5vh 16px; overflow-y:auto; z-index:50; }
+  .overlay.open{ display:flex; }
+  .modal{ background:var(--surface); border-radius:16px; width:100%; max-width:580px; box-shadow:0 30px 60px -20px rgba(0,0,0,.35); border:1px solid var(--line); }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-bottom:1px solid var(--line); }
+  .modal-head h2{ font-size:19px; margin:0; }
+  .modal-close{ background:none; border:none; font-size:20px; color:var(--ink-faint); padding:4px 8px; border-radius:6px; }
+  .modal-close:hover{ background:var(--surface-2); color:var(--ink); }
+  .modal-body{ padding:24px; display:flex; flex-direction:column; gap:20px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+  .field input, .field select, .field textarea{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--bg); color:var(--ink); font:inherit; font-size:14.5px;
+  }
+  .field textarea{ resize:vertical; min-height:64px; }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--brand); outline-offset:1px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .modal-foot{ padding:16px 24px 22px; display:flex; justify-content:flex-end; gap:10px; }
+
+  /* ---- Detail dialog: key/value + paper route ---- */
+  .kv-card{ background:var(--surface); }
+  .kv-row{ display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .kv-row:last-child{ border-bottom:none; }
+  .kv-row .k{ color:var(--ink-faint); }
+  .kv-row .v{ font-weight:600; text-align:right; }
+  .kv-row .v.mono{ font-weight:500; }
+
+  .panel-title{ font-family:"Lora",serif; font-size:15px; font-weight:600; margin:0 0 10px; }
+
+  .route-list{ display:flex; flex-direction:column; }
+  .route-item{ display:flex; align-items:flex-start; gap:12px; padding:10px 0; }
+  .route-dot{ width:11px; height:11px; border-radius:50%; margin-top:4px; flex:0 0 auto; background:var(--ink-faint); }
+  .route-dot.done{ background:var(--good); }
+  .route-dot.current{ background:var(--current); }
+  .route-dot.bad{ background:var(--bad); }
+  .route-body{ flex:1; display:flex; justify-content:space-between; gap:10px; }
+  .route-name{ font-size:14px; font-weight:600; }
+  .route-cap{ font-size:12px; color:var(--ink-faint); margin-top:2px; }
+  .route-tag{ font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+  .route-tag.done{ color:var(--good); }
+  .route-tag.current{ color:var(--current); }
+
+  /* ---- Timeline (full audit trail) ---- */
+  .timeline{ display:flex; flex-direction:column; gap:0; margin-top:2px; }
+  .tl-item{ display:grid; grid-template-columns:16px 1fr; gap:12px; }
+  .tl-dot-col{ display:flex; flex-direction:column; align-items:center; }
+  .tl-dot{ width:8px; height:8px; border-radius:50%; background:var(--brand); margin-top:5px; }
+  .tl-line{ flex:1; width:1px; background:var(--line); margin-top:2px; }
+  .tl-item:last-child .tl-line{ display:none; }
+  .tl-body{ padding-bottom:14px; }
+  .tl-body .txt{ font-size:13.5px; }
+  .tl-body .ts{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-faint); margin-top:2px; }
+
+  .qr-wrap{ display:flex; align-items:center; gap:16px; background:var(--surface-2); border-radius:12px; padding:16px; }
+  .qr-wrap img{ background:#fff; padding:6px; border-radius:6px; }
+  .conf-bar{ height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; margin-top:6px; }
+  .conf-bar > div{ height:100%; background:var(--brand); }
+
+  .progress-modal{ text-align:center; padding:40px 24px; }
+  .progress-modal .stage{ font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--ink-soft); margin-top:16px; min-height:18px; }
+  .spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--surface-2); border-top-color:var(--brand); margin:0 auto; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){ .spinner{ animation:none; } }
+
+  .rbac-table{ width:100%; border-collapse:collapse; font-size:14px; }
+  .rbac-table th, .rbac-table td{ text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .rbac-table th{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); background:var(--surface-2); }
+
+  .banner{ display:flex; gap:12px; align-items:flex-start; background:var(--current-soft); border:1px solid var(--line); border-radius:10px; padding:14px 16px; font-size:13.5px; color:var(--ink-soft); margin-bottom:24px; }
+  .banner b{ color:var(--ink); }
+
+  .offline-card{ max-width:460px; margin:60px auto; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:28px; box-shadow:var(--shadow); text-align:left; }
+  .offline-card h2{ margin:0 0 8px; font-size:19px; }
+  .offline-card p{ color:var(--ink-soft); font-size:14px; }
+  .offline-card pre{ background:var(--surface-2); border-radius:8px; padding:12px 14px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; overflow-x:auto; }
+
+  /* ---- Login screen ---- */
+  .login-shell{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow); padding:32px 30px 28px; }
+  .login-brand{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:24px; }
+  .login-brand .brand-mark{ width:42px; height:42px; font-size:21px; border-radius:11px; }
+  .login-brand .brand-word{ font-size:22px; }
+  .login-card .field{ margin-bottom:16px; }
+  .login-error{ background:var(--bad-soft); color:var(--bad); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px; }
+  .login-card .btn{ width:100%; justify-content:center; padding:11px 18px; font-size:15px; }
+  .demo-accounts{ margin-top:22px; padding-top:18px; border-top:1px solid var(--line); font-size:11.5px; color:var(--ink-faint); line-height:1.7; }
+  .demo-accounts b{ color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; font-size:10px; display:block; margin-bottom:6px; }
+
+  /* ---- Account management ---- */
+  .acct-row{ display:grid; grid-template-columns:1.4fr 1fr 0.9fr 160px; gap:14px; align-items:center; padding:14px 18px; border-top:1px solid var(--line); }
+  .acct-row:first-child{ border-top:none; }
+  .acct-row.head{ background:var(--surface-2); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; }
+  .acct-row .actions{ display:flex; gap:6px; justify-content:flex-end; }
+  .role-tag{ display:inline-block; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); text-transform:capitalize; }
+
+  @media (max-width:900px){
+    .app-shell{ flex-direction:column; }
+    .sidebar{ position:relative; width:100%; flex:0 0 auto; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px 14px; gap:6px; }
+    .sidebar-brand{ border-bottom:none; padding:8px 6px; }
+    .nav-label{ display:none; }
+    .sidebar-nav{ display:flex; padding:0; gap:4px; }
+    .sidebar-spacer{ display:none; }
+    .conn-row, .reset-link{ display:none; }
+    .sidebar-foot{ border-top:none; margin-left:auto; }
+    .content-header{ padding:22px 20px; }
+    .content-body{ padding:20px 20px 60px; }
+    .qrow{ grid-template-columns:1fr; gap:6px; }
+    .qrow.head{ display:none; }
+    .row2, .row3{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+/* =======================================================================
+   DocuRoute — click-through prototype (desktop)
+   Data Layer is Supabase (Postgres + Auth + Storage) — see supabase/schema.sql
+   for the tables, RLS policies, and storage bucket. supabase-config.js holds
+   the project URL/anon key and the shared `sb` client. This page is a pure
+   client of that shared, multi-user, cloud-hosted state — no localStorage
+   fallback for data (Supabase's own SDK caches the auth session there).
+   Simulates the Section 3.10 pipeline: intake -> AI processing -> the
+   70%-confidence gate -> deterministic routing table -> office action.
+   ======================================================================= */
+
+// Section 1.9's deterministic routing table (Dean's Office/Registrar/Accounting).
+const ROUTES = {
+  waiver:     ["Dean's Office","Registrar"],
+  adjustment: ["Registrar"],
+  clearance:  ["Accounting","Dean's Office","Registrar"]
+};
+
+const ICONS = {
+  doc:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>`,
+  bell:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3l-2 4h14l-2-4V8a5 5 0 0 0-5-5Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>`,
+  inbox: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h4l2 3h4l2-3h4"/><path d="M4 12 6 5h12l2 7"/><path d="M4 12v6h16v-6"/></svg>`,
+  wallet:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14" r="1.1" fill="currentColor"/></svg>`,
+  shield:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  grid:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M4 19c0-3 2.3-5 5-5s5 2 5 5"/><circle cx="17" cy="9" r="2.3"/><path d="M15.3 19c.2-2 1.5-3.4 3.3-3.9"/></svg>`,
+  info:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>`
+};
+
+// Portal access rules: a logged-in account only ever sees its own role's pages.
+const PAGES = {
+  student: [ { id:"active",        label:"Active Requests", icon:"doc" },
+             { id:"notifications", label:"Notifications",   icon:"bell" } ],
+  staff:   [ { id:"intake",        label:"Intake Requests", icon:"inbox" },
+             { id:"dean",          label:"Dean Decides",    icon:"shield" } ],
+  admin:   [ { id:"overview",      label:"System Overview", icon:"grid" },
+             { id:"accounts",      label:"Account Management", icon:"users" } ]
+};
+const PORTAL_LABEL = { student:"Student Portal", staff:"Staff Portal", admin:"Admin Portal" };
+const TYPE_LABEL = { waiver:"Prerequisite Waiver", adjustment:"Section Adjustment", clearance:"Student Clearance" };
+
+let session = null; // {id, username, role, name, studentNo, program}
+let state = { requests: [], accounts: [] };
+let apiOnline = false;
+let loginError = "";
+
+async function loadSession(){
+  const { data } = await sb.auth.getSession();
+  if(!data.session){ session = null; return; }
+  await hydrateProfile(data.session.user);
+}
+
+/* ---------------- Supabase data layer ---------------- */
+
+class ApiError extends Error {}
+
+async function hydrateProfile(user){
+  const { data, error } = await sb.from("profiles").select("*").eq("id", user.id).single();
+  if(error || !data){ session = null; return; }
+  session = { id:user.id, email:data.email || user.email, role:data.role, name:data.name, studentNo:data.student_no, program:data.program };
+}
+
+function mapRequestRow(row){
+  const logs = (row.request_logs || []).slice().sort((a,b)=> new Date(a.ts) - new Date(b.ts));
+  return {
+    id: row.id, type: row.type, student: row.student_name, studentNo: row.student_no,
+    program: row.program, contactNo: row.contact_no, fields: row.fields || {},
+    confidence: row.confidence, route: row.route, hop: row.hop, status: row.status,
+    documentPath: row.document_path,
+    log: logs.map(l => ({ ts: l.ts, text: l.text }))
+  };
+}
+
+async function addLog(requestId, text){
+  const { error } = await sb.from("request_logs").insert({ request_id: requestId, text });
+  if(error) throw new ApiError(error.message);
+}
+
+async function refresh(){
+  const { data, error } = await sb.from("requests").select("*, request_logs(ts,text)").order("created_at", { ascending:true });
+  if(error) throw new ApiError(error.message);
+  state.requests = data.map(mapRequestRow);
+  apiOnline = true;
+}
+async function refreshAccounts(){
+  const { data, error } = await sb.from("profiles").select("*").order("name");
+  if(error) throw new ApiError(error.message);
+  state.accounts = data.map(a => ({ id:a.id, username:a.email, role:a.role, name:a.name, studentNo:a.student_no, program:a.program }));
+  apiOnline = true;
+}
+
+function fmtTs(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-PH",{month:"short",day:"numeric"}) + " · " +
+         d.toLocaleTimeString("en-PH",{hour:"2-digit",minute:"2-digit"});
+}
+function fmtAge(iso){
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.max(1, Math.round(diffMs / 60000));
+  if(mins < 60) return mins + " min" + (mins===1?"":"s");
+  const hrs = Math.round(mins/60);
+  if(hrs < 24) return hrs + " hr" + (hrs===1?"":"s");
+  const days = Math.round(hrs/24);
+  return days + " day" + (days===1?"":"s");
+}
+
+/* ---------------- Rendering shell ---------------- */
+
+function configNeededHtml(){
+  return `<div class="login-shell"><div class="offline-card">
+    <h2>Supabase not configured yet</h2>
+    <p>Edit <span class="mono">prototype/supabase-config.js</span> with your project's URL and anon key (Project Settings &rarr; API), and run <span class="mono">prototype/supabase/schema.sql</span> once in the Supabase SQL Editor.</p>
+    <pre>const SUPABASE_URL = "https://xxxx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJ...";</pre>
+    <p>Then reload this page.</p>
+  </div></div>`;
+}
+
+function renderRoot(){
+  const root = document.getElementById("root");
+  if(!SUPABASE_CONFIGURED){ root.innerHTML = configNeededHtml(); return; }
+  if(!session){
+    root.innerHTML = `<div class="login-shell"><div class="login-card" id="loginCard"></div></div>`;
+    renderLogin();
+    return;
+  }
+  root.innerHTML = `<div class="app-shell"><aside class="sidebar" id="sidebar"></aside><main class="content" id="view"></main></div>`;
+  renderSidebar();
+  const view = document.getElementById("view");
+  if(!apiOnline){ view.innerHTML = offlineHtml(); wireOfflineRetry(); return; }
+  view.innerHTML = renderPage();
+  wireViewEvents();
+}
+
+/* ---------------- Login ---------------- */
+
+function renderLogin(){
+  const card = document.getElementById("loginCard");
+  card.innerHTML = `
+    <div class="login-brand">
+      <div class="brand-mark">&Omega;</div>
+      <div class="brand-word">DocuRoute</div>
+    </div>
+    ${loginError ? `<div class="login-error">${loginError}</div>` : ""}
+    <div class="field"><label>School Email Address</label><input id="lUser" autocomplete="username" placeholder="you@mymail.mapua.edu.ph"></div>
+    <div class="field"><label>Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
+    <button class="btn" id="loginBtn">Log In</button>
+    <div class="demo-accounts">
+      <b>Demo accounts</b>
+      Student — apvsanpedro@mymail.mapua.edu.ph / BSIT3pass<br>
+      Staff — staff@mymail.mapua.edu.ph / Staff123!<br>
+      Admin — admin@mymail.mapua.edu.ph / AdminPass1
+    </div>
+  `;
+  const submit = async ()=>{
+    const email = document.getElementById("lUser").value.trim();
+    const password = document.getElementById("lPass").value;
+    try{
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      await hydrateProfile(data.user);
+      if(!session) throw new Error("No profile found for this account — see supabase/schema.sql.");
+      loginError = ""; apiOnline = true;
+      await bootAfterLogin();
+    }catch(e){
+      loginError = e.message || "Could not reach Supabase.";
+      renderLogin();
+    }
+  };
+  document.getElementById("loginBtn").addEventListener("click", submit);
+  card.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("keydown", (e)=>{ if(e.key==="Enter") submit(); });
+  });
+}
+
+async function logout(){
+  await sb.auth.signOut();
+  session = null;
+  renderRoot();
+}
+
+async function bootAfterLogin(){
+  state.page = PAGES[session.role][0].id;
+  try{
+    await refresh();
+    if(session.role === "admin") await refreshAccounts();
+  }catch(e){ apiOnline = false; }
+  renderRoot();
+}
+
+function renderSidebar(){
+  const el = document.getElementById("sidebar");
+  const pages = PAGES[session.role];
+  const current = state.page || pages[0].id;
+  el.innerHTML = `
+    <div class="sidebar-brand">
+      <div class="brand-mark">&Omega;</div>
+      <div class="brand-word">DocuRoute</div>
+    </div>
+    <div class="nav-label">Navigation</div>
+    <nav class="sidebar-nav">
+      ${pages.map(p => `
+        <button class="nav-item ${current===p.id?"active":""}" data-page="${p.id}">
+          ${ICONS[p.icon]}<span>${p.label}</span>
+        </button>
+      `).join("")}
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <div class="conn-row">
+      <span class="conn-dot ${apiOnline?"":"off"}"></span>
+      ${apiOnline ? "Connected to Supabase" : "Supabase unreachable"}
+    </div>
+    <button class="reset-link" id="logoutBtn">&#8592; log out</button>
+    <div class="sidebar-foot">
+      <div class="avatar">${session.name.charAt(0)}</div>
+      <div class="who">
+        <div class="name">${session.name}</div>
+        <div class="portal">${PORTAL_LABEL[session.role]}</div>
+      </div>
+    </div>
+  `;
+  el.querySelectorAll("[data-page]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ state.page = btn.dataset.page; renderRoot(); });
+  });
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+}
+
+function renderPage(){
+  const key = session.role + ":" + (state.page || PAGES[session.role][0].id);
+  if(key === "student:active") return studentActiveView();
+  if(key === "student:notifications") return studentNotificationsView();
+  if(key === "staff:intake") return intakeRequestsView();
+  if(key === "staff:dean") return deanDecidesView();
+  if(key === "admin:overview") return adminOverviewView();
+  if(key === "admin:accounts") return accountManagementView();
+  return `<div class="content-body"><div class="empty">Unknown page.</div></div>`;
+}
+
+function offlineHtml(){
+  return `
+    <div class="content-header">
+      <h1>Can't reach Supabase</h1>
+      <p>This prototype's data (and accounts) now live in a shared Supabase project instead of a local server.</p>
+    </div>
+    <div class="content-body">
+      <div class="offline-card">
+        <h2>Check your connection</h2>
+        <p>Confirm you have internet access, and that the project referenced in <span class="mono">supabase-config.js</span> hasn't paused itself — free-tier Supabase projects pause after about a week with no API activity. Open the project in the Supabase dashboard to resume it.</p>
+        <button class="btn" id="retryBtn">Retry connection</button>
+      </div>
+    </div>
+  `;
+}
+function wireOfflineRetry(){
+  const btn = document.getElementById("retryBtn");
+  if(btn) btn.addEventListener("click", async ()=>{
+    try{ await refresh(); if(session.role==="admin") await refreshAccounts(); }catch(e){}
+    renderRoot();
+  });
+}
+
+/* ---------------- Status helpers ---------------- */
+
+function pill(status){
+  const map = {
+    submitted:["neutral","Submitted"], review:["neutral","AI Review"],
+    unverified:["bad","Unverified"], routed:["current","Routed"],
+    progress:["current","In Progress"], completed:["good","Completed"],
+    approved:["good","Approved"], declined:["bad","Declined"]
+  };
+  const [cls,label] = map[status] || ["neutral",status];
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+function confPill(r){
+  if(r.status==="unverified") return `<span class="pill bad">${r.confidence}% Conflict</span>`;
+  if(r.status==="declined") return `<span class="pill bad">Declined</span>`;
+  if(r.status==="completed") return `<span class="pill good">Completed</span>`;
+  if(r.confidence!==null) return `<span class="pill good">${r.confidence}% Suggested</span>`;
+  return pill(r.status);
+}
+function statusCaption(r){
+  if(r.status==="unverified") return "Confidence below 70% threshold — needs manual classification.";
+  if(r.status==="declined"){ const last=r.log[r.log.length-1]; return last ? last.text : ""; }
+  if(r.status==="completed") return "All offices cleared — audit trail closed.";
+  if(r.status==="submitted" || r.status==="review") return "Awaiting AI Processing Layer.";
+  const prevIdx = r.hop - 1;
+  return prevIdx>=0 ? `${r.route[prevIdx]} → ${r.route[r.hop]}` : `Awaiting action at ${r.route[r.hop]}`;
+}
+function currentOfficeLabel(req){
+  if(req.status==="unverified") return "Intake Clerk queue";
+  if(req.status==="completed" || req.status==="declined") return "Closed";
+  return req.route[req.hop];
+}
+
+function stepDotClass(i, route, hop, status){
+  if(status==="completed") return "done";
+  if(status==="declined") return i<hop ? "done" : (i===hop ? "bad" : "");
+  if(i<hop) return "done";
+  if(i===hop) return "current";
+  return "";
+}
+function stepperHtml(route, hop, status){
+  return `<div class="stepper">${route.map((loc,i)=>`
+      <div class="step-node">
+        <div class="step-dot ${stepDotClass(i,route,hop,status)}"></div>
+        <div class="step-label">${loc}</div>
+      </div>
+      ${i<route.length-1 ? `<div class="step-line ${i<hop?"done":""}"></div>` : ""}
+    `).join("")}</div>`;
+}
+
+/* ---------------- Student views ---------------- */
+
+function myRequests(){
+  // Scoped to the logged-in student — matches the RBAC rule "Own requests only" (Section 1.9).
+  return state.requests.filter(r => r.student === session.name);
+}
+
+function studentActiveView(){
+  const mine = myRequests();
+  const cards = mine.map(r => `
+    <div class="req-step-card">
+      <div class="req-step-top">
+        <div class="req-step-name">
+          <span class="title">${TYPE_LABEL[r.type]}</span>
+          <span class="id mono">${r.id}</span>
+        </div>
+        <button class="info-btn" data-open="${r.id}" title="View details">${ICONS.info}</button>
+      </div>
+      ${stepperHtml(r.route, r.hop, r.status)}
+      <div class="req-step-foot">${pill(r.status)}<span class="req-step-meta">Currently at <b>${currentOfficeLabel(r)}</b> · submitted ${fmtTs(r.log[0].ts)}</span></div>
+    </div>
+  `).join("") || `<div class="empty">No requests yet — submit your first one.</div>`;
+
+  return `
+    <div class="content-header">
+      <h1>Active Requests</h1>
+      <p>Track a submitted form the same way you'd track a courier parcel — status, current office, and QR-linked history.</p>
+    </div>
+    <div class="content-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:6px;">
+        <div class="section-tab">My Request <span class="chev">&#8964;</span></div>
+        <button class="btn" id="newReqBtn">+ New Request</button>
+      </div>
+      ${cards}
+    </div>
+  `;
+}
+
+function studentNotificationsView(){
+  const mine = myRequests();
+  const newCount = mine.filter(r=>r.status==="submitted" || r.status==="review").length;
+  const unverifiedCount = mine.filter(r=>r.status==="unverified").length;
+  const routedCount = mine.filter(r=>r.status==="routed" || r.status==="progress" || r.status==="completed").length;
+
+  const rowsHtml = mine.length ? `<div class="qlist">
+      <div class="qrow head" style="grid-template-columns:104px 1.3fr 68px 1fr 1.7fr 60px;"><div>ID</div><div>Form</div><div>Age</div><div>Location</div><div>Status</div><div></div></div>
+      ${mine.map(r=>`
+        <div class="qrow" style="grid-template-columns:104px 1.3fr 68px 1fr 1.7fr 60px;">
+          <div class="id mono">${r.id}</div>
+          <div class="who">${TYPE_LABEL[r.type]}</div>
+          <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
+          <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
+          <div class="status-cell">${confPill(r)}<div class="cap">${statusCaption(r)}</div></div>
+          <div class="actions"><button class="info-btn" data-open="${r.id}" title="View details">${ICONS.info}</button></div>
+        </div>
+      `).join("")}
+    </div>` : `<div class="empty">Nothing to notify you about yet.</div>`;
+
+  return `
+    <div class="content-header">
+      <h1>Notification</h1>
+      <p>Status changes across every request you've submitted, newest activity first.</p>
+      <div class="badges">
+        <span class="count-badge">New <b>${newCount}</b></span>
+        <span class="count-badge">Unverified <b>${unverifiedCount}</b></span>
+        <span class="count-badge">Routed <b>${routedCount}</b></span>
+      </div>
+    </div>
+    <div class="content-body">
+      <div class="card">${rowsHtml}</div>
+    </div>
+  `;
+}
+
+/* ---------------- Staff views (Intake Requests / Dean Decides) ---------------- */
+
+function queueRowsHtml(list, kind){
+  if(!list.length) return `<div class="empty">Nothing here right now.</div>`;
+  return `<div class="qlist">
+    <div class="qrow head"><div>ID</div><div>Form</div><div>Student</div><div>Age</div><div>Location</div><div>Status</div><div></div></div>
+    ${list.map(r=>`
+      <div class="qrow">
+        <div class="id mono">${r.id}</div>
+        <div class="who">${TYPE_LABEL[r.type]}</div>
+        <div class="who">${r.student}<div class="sub">${r.studentNo}</div></div>
+        <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
+        <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
+        <div class="status-cell">${confPill(r)}<div class="cap">${statusCaption(r)}</div></div>
+        <div class="actions">
+          <button class="btn secondary small" data-open="${r.id}">View</button>
+          ${kind==="unverified" ? `<button class="btn small" data-confirm="${r.id}">Confirm &amp; Route</button>` : ""}
+          ${kind==="mine" ? `<button class="btn small" data-advance="${r.id}">${r.status==="routed" ? "Mark In Progress" : "Approve / Clear"}</button>
+                              <button class="btn secondary small" data-decline="${r.id}">Decline</button>` : ""}
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
+}
+
+function queuePageHtml(title, subtitle, offices, includeUnverified){
+  const unverified = includeUnverified ? state.requests.filter(r=>r.status==="unverified") : [];
+  const mine = state.requests.filter(r => (r.status==="routed" || r.status==="progress") && offices.includes(r.route[r.hop]));
+  const done = state.requests.filter(r => r.route.some(o=>offices.includes(o)) && (r.status==="completed" || r.status==="declined"));
+
+  return `
+    <div class="content-header">
+      <h1>${title}</h1>
+      <p>${subtitle}</p>
+      <div class="badges">
+        ${includeUnverified ? `<span class="count-badge">Unverified <b>${unverified.length}</b></span>` : ""}
+        <span class="count-badge">Assigned <b>${mine.length}</b></span>
+        <span class="count-badge">Closed <b>${done.length}</b></span>
+      </div>
+    </div>
+    <div class="content-body">
+      ${includeUnverified ? `
+        <div class="section-title">Needs manual classification (&lt; 70% confidence)</div>
+        <div class="card">${queueRowsHtml(unverified,"unverified")}</div>
+      `:""}
+      <div class="section-title">Assigned to ${offices.join(" / ")}</div>
+      <div class="card">${queueRowsHtml(mine,"mine")}</div>
+      <div class="section-title">Recently closed</div>
+      <div class="card">${queueRowsHtml(done,"done")}</div>
+    </div>
+  `;
+}
+
+function intakeRequestsView(){
+  return queuePageHtml(
+    "Intake Requests",
+    "Capture paper forms, confirm the type, and route anything the AI Processing Layer couldn't classify with enough confidence.",
+    ["Registrar","Accounting"], true
+  );
+}
+function deanDecidesView(){
+  return queuePageHtml(
+    "Dean Decides",
+    "Inspect paper, apply a digital signature, and send the request on to Registrar.",
+    ["Dean's Office"], false
+  );
+}
+
+/* ---------------- Admin views ---------------- */
+
+function adminOverviewView(){
+  const all = state.requests;
+  const total = all.length;
+  const withConf = all.filter(r=>r.confidence!==null);
+  const avgConf = withConf.length ? Math.round(withConf.reduce((s,r)=>s+r.confidence,0) / withConf.length) : 0;
+  const autoRouted = all.filter(r=>r.confidence!==null && r.confidence>=70).length;
+  const flagged = all.filter(r=>r.confidence!==null && r.confidence<70).length;
+  const completed = all.filter(r=>r.status==="completed").length;
+
+  return `
+    <div class="content-header">
+      <h1>System Overview</h1>
+      <p>Read-only reference for role permissions, plus a live snapshot of how the routing pipeline is performing against the temporary database.</p>
+    </div>
+    <div class="content-body">
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="num">${total}</div><div class="lbl">Total requests</div></div>
+        <div class="stat-tile"><div class="num">${avgConf}%</div><div class="lbl">Avg. confidence</div></div>
+        <div class="stat-tile"><div class="num">${autoRouted}</div><div class="lbl">Auto-routed (&ge;70%)</div></div>
+        <div class="stat-tile"><div class="num">${flagged}</div><div class="lbl">Flagged for review</div></div>
+        <div class="stat-tile"><div class="num">${completed}</div><div class="lbl">Completed</div></div>
+      </div>
+      <div class="section-title">Role-Based Access Control (Section 1.9)</div>
+      <p style="font-size:12.5px;color:var(--ink-faint);margin:-4px 0 12px;max-width:70ch;">
+        The thesis design distinguishes Registrar Clerk, Accounting Personnel, and Dean as separate roles (rows below).
+        This login demo collapses those three into one <b style="color:var(--ink-soft)">Staff</b> account for convenience —
+        it can act on Intake Requests and Dean Decides regardless of office.
+      </p>
+      <div class="card">
+        <table class="rbac-table">
+          <thead><tr><th>Role</th><th>Can view</th><th>Can act on</th></tr></thead>
+          <tbody>
+            <tr><td>Student</td><td>Own requests only</td><td>Submit new request</td></tr>
+            <tr><td>Registrar Clerk</td><td>Unverified queue + Registrar queue</td><td>Confirm classification, approve/decline, clear</td></tr>
+            <tr><td>Accounting Personnel</td><td>Accounting queue</td><td>Approve/decline, clear</td></tr>
+            <tr><td>Dean</td><td>Dean's Office queue</td><td>Recommend/approve, decline (digital signature)</td></tr>
+            <tr><td>Administrator</td><td>All requests, system stats</td><td>Manage accounts, reset/seed data</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="section-title">Temporary Database</div>
+      <div class="card" style="padding:18px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div style="font-size:13.5px;color:var(--ink-soft);max-width:56ch;">Wipes and reseeds request/transaction data back to the four demo requests. Accounts are not affected.</div>
+        <button class="btn secondary" id="resetBtn">&#8635; Reset demo database</button>
+      </div>
+    </div>
+  `;
+}
+
+function accountManagementView(){
+  const rows = state.accounts.map(a => `
+    <div class="acct-row">
+      <div>
+        <div style="font-weight:600;">${a.name}</div>
+        <div class="mono" style="font-size:12px;color:var(--ink-faint);">${a.username}</div>
+      </div>
+      <div><span class="role-tag">${a.role}</span></div>
+      <div style="font-size:13px;color:var(--ink-soft);">${a.studentNo || "—"}</div>
+      <div class="actions">
+        <button class="btn secondary small" data-edit-acct="${a.id}">Edit</button>
+        <button class="btn secondary small" data-delete-acct="${a.id}">Delete</button>
+      </div>
+    </div>
+  `).join("") || `<div class="empty">No accounts yet.</div>`;
+
+  return `
+    <div class="content-header">
+      <h1>Account Management</h1>
+      <p>Create, edit, and remove Student / Staff / Admin accounts — the only place login credentials for this prototype can be changed.</p>
+    </div>
+    <div class="content-body">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <button class="btn" id="newAcctBtn">+ Add Account</button>
+      </div>
+      <div class="card">
+        <div class="acct-row head"><div>Account</div><div>Role</div><div>Student No.</div><div></div></div>
+        ${rows}
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- Demo data reset ---------------- */
+
+async function applySeedPlan(id, type, confidence, plan){
+  await addLog(id, "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run.");
+  const route = ROUTES[type];
+  if(confidence < 70){
+    await addLog(id, `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`);
+    await sb.from("requests").update({ confidence, status:"unverified" }).eq("id", id);
+    if(plan === "unverified") return;
+  } else {
+    await addLog(id, `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
+    await sb.from("requests").update({ confidence, status:"routed" }).eq("id", id);
+    if(plan === "routed") return;
+  }
+  let hop = 0;
+  if(plan === "progress" || plan === "completed"){
+    await addLog(id, `${route[hop]} marked the request In Progress.`);
+    await sb.from("requests").update({ status:"progress" }).eq("id", id);
+    if(plan === "progress") return;
+  }
+  if(plan === "completed"){
+    while(hop < route.length - 1){
+      await addLog(id, `${route[hop]} cleared the request - forwarded to ${route[hop+1]}.`);
+      hop++;
+    }
+    await addLog(id, `${route[hop]} gave final approval. Request closed.`);
+    await sb.from("requests").update({ status:"completed", hop }).eq("id", id);
+  }
+}
+
+async function resetDemoRequests(){
+  await sb.rpc("reset_request_seq");
+  await sb.from("requests").delete().neq("id", "");
+  const { data: profiles } = await sb.from("profiles").select("id,name,student_no,program");
+  const byName = n => (profiles || []).find(p => p.name === n);
+  const seeds = [
+    { type:"waiver",     name:"Aaron Peter San Pedro", fields:{ quarterAY:"1Q, AY 2026-2027", prereq:"IT101", advanced:"IT201" }, confidence:92, plan:"routed" },
+    { type:"adjustment", name:"Mike Emil F. Vocal",     fields:{ currentSection:"IT41FA1", newSection:"IT41FA2", subject:"IT201" }, confidence:88, plan:"completed" },
+    { type:"clearance",  name:"Bea Villanueva",         fields:{ reason:"Transferring to another program" }, confidence:61, plan:"unverified" },
+    { type:"waiver",     name:"Carlo Dizon",            fields:{ quarterAY:"1Q, AY 2026-2027", prereq:"CS201", advanced:"CS301" }, confidence:95, plan:"progress" }
+  ];
+  for(const s of seeds){
+    const p = byName(s.name);
+    const { data: id } = await sb.rpc("next_request_id");
+    await sb.from("requests").insert({
+      id, type: s.type, student_id: p ? p.id : null, student_name: s.name,
+      student_no: p ? p.student_no : "—", program: p ? p.program : "—",
+      contact_no: "09171234567", fields: s.fields, confidence: null, route: ROUTES[s.type], hop: 0, status: "submitted"
+    });
+    await addLog(id, `Submitted by ${s.name} at the Registrar window.`);
+    await applySeedPlan(id, s.type, s.confidence, s.plan);
+  }
+}
+
+/* ---------------- Account modal ---------------- */
+/* Editing role/name/etc. works fine under RLS with the anon key. Creating or
+   deleting a login needs the Supabase service-role key, which can never ship
+   to the browser — that moves to the Render-hosted admin service (next step). */
+
+function accountModalHtml(existing){
+  return `
+    <div class="modal-head"><h2>Edit Account</h2><button class="modal-close" data-close>&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>School email (set at sign-up — read only here)</label><input value="${existing.username}" disabled></div>
+      <div class="row2">
+        <div class="field"><label>Display name</label><input id="aName" value="${existing.name}"></div>
+        <div class="field">
+          <label>Role</label>
+          <select id="aRole">
+            <option value="student" ${existing.role==="student"?"selected":""}>Student</option>
+            <option value="staff" ${existing.role==="staff"?"selected":""}>Staff</option>
+            <option value="admin" ${existing.role==="admin"?"selected":""}>Admin</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Student No. (optional)</label><input id="aStudentNo" value="${existing.studentNo || ""}"></div>
+        <div class="field"><label>Program (optional)</label><input id="aProgram" value="${existing.program || ""}"></div>
+      </div>
+      <div id="acctError"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close>Cancel</button>
+      <button class="btn" id="saveAcctBtn">Save Changes</button>
+    </div>
+  `;
+}
+
+function openAccountModal(existing){
+  if(!existing){
+    alert("Creating a login needs a privileged server call (Supabase service-role key) — coming with the Render admin service. For now, add the user in Supabase Studio -> Authentication -> Users, then edit their role/name here.");
+    return;
+  }
+  const modal = document.getElementById("modal");
+  modal.innerHTML = accountModalHtml(existing);
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("saveAcctBtn").addEventListener("click", async ()=>{
+    try{
+      const { error } = await sb.from("profiles").update({
+        name: val("aName"), role: val("aRole"),
+        student_no: val("aStudentNo") || null, program: val("aProgram") || null
+      }).eq("id", existing.id);
+      if(error) throw error;
+      await refreshAccounts();
+      closeModal();
+      renderRoot();
+    }catch(e){
+      document.getElementById("acctError").innerHTML = `<div class="login-error">${e.message || "Could not reach Supabase."}</div>`;
+    }
+  });
+}
+
+async function deleteAccount(id){
+  alert("Deleting a login needs a privileged server call (Supabase service-role key) — coming with the Render admin service.");
+}
+
+/* ---------------- New Request modal ---------------- */
+
+function newRequestModalHtml(){
+  return `
+    <div class="modal-head"><h2>New Request</h2><button class="modal-close" data-close>&times;</button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Document type</label>
+        <select id="fType">
+          <option value="waiver">Prerequisite Waiver</option>
+          <option value="adjustment">Section Adjustment</option>
+          <option value="clearance">Student Clearance</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Full name</label><input id="fName" value="${session.name}" readonly></div>
+        <div class="field"><label>Student No.</label><input id="fStudentNo" value="${session.studentNo || ""}" readonly></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Program / Year</label><input id="fProgram" value="${session.program || ""}" readonly></div>
+        <div class="field"><label>Contact No.</label><input id="fContact" value="09171234567"></div>
+      </div>
+      <div id="typeFields"></div>
+      <div class="field">
+        <label>Attach scanned / photographed form</label>
+        <input type="file" id="fFile">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close>Cancel</button>
+      <button class="btn" id="submitReqBtn">Submit &amp; Run AI Classification</button>
+    </div>
+  `;
+}
+function typeFieldsHtml(type){
+  if(type==="waiver") return `
+    <div class="row2">
+      <div class="field"><label>Quarter, AY</label><input id="tQuarter" value="1Q, AY 2026-2027"></div>
+      <div class="field"><label>Prerequisite course</label><input id="tPrereq" value="IT101"></div>
+    </div>
+    <div class="field"><label>Advanced course to take simultaneously</label><input id="tAdvanced" value="IT201"></div>`;
+  if(type==="adjustment") return `
+    <div class="row2">
+      <div class="field"><label>Current section</label><input id="tCurrent" value="IT31FA1"></div>
+      <div class="field"><label>Requested section</label><input id="tNew" value="IT31FA2"></div>
+    </div>
+    <div class="field"><label>Subject code</label><input id="tSubject" value="IT201"></div>`;
+  return `<div class="field"><label>Reason for clearance</label><textarea id="tReason">Graduating this term.</textarea></div>`;
+}
+
+function openNewRequestModal(){
+  const modal = document.getElementById("modal");
+  modal.innerHTML = newRequestModalHtml();
+  const typeSel = modal.querySelector("#fType");
+  const typeFields = modal.querySelector("#typeFields");
+  typeFields.innerHTML = typeFieldsHtml(typeSel.value);
+  typeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(typeSel.value); });
+  document.getElementById("overlay").classList.add("open");
+  modal.querySelector("#submitReqBtn").addEventListener("click", handleSubmitRequest);
+}
+
+async function handleSubmitRequest(){
+  const type = document.getElementById("fType").value;
+  const student = document.getElementById("fName").value || "Unnamed Student";
+  const studentNo = document.getElementById("fStudentNo").value || "—";
+  const program = document.getElementById("fProgram").value || "—";
+  const contactNo = document.getElementById("fContact").value || "—";
+  const fields = {};
+  if(type==="waiver"){ fields.quarterAY=val("tQuarter"); fields.prereq=val("tPrereq"); fields.advanced=val("tAdvanced"); }
+  if(type==="adjustment"){ fields.currentSection=val("tCurrent"); fields.newSection=val("tNew"); fields.subject=val("tSubject"); }
+  if(type==="clearance"){ fields.reason=val("tReason"); }
+  const fileInput = document.getElementById("fFile");
+  const file = fileInput && fileInput.files[0];
+
+  closeModal();
+  try{
+    const { data: id, error: idErr } = await sb.rpc("next_request_id");
+    if(idErr) throw new ApiError(idErr.message);
+    const { error: insErr } = await sb.from("requests").insert({
+      id, type, student_id: session.id, student_name: student, student_no: studentNo,
+      program, contact_no: contactNo, fields, confidence: null, route: ROUTES[type], hop: 0, status: "submitted"
+    });
+    if(insErr) throw new ApiError(insErr.message);
+    await addLog(id, `Submitted by ${student} - document uploaded to DocuRoute.`);
+    if(file){
+      const path = `${id}/${file.name}`;
+      const { error: upErr } = await sb.storage.from("documents").upload(path, file, { upsert:true });
+      if(!upErr) await sb.from("requests").update({ document_path: path }).eq("id", id);
+    }
+    await refresh();
+    runAiPipeline(id);
+  }catch(e){ alert(e.message || "Could not reach Supabase."); renderRoot(); }
+}
+function val(id){ const el = document.getElementById(id); return el ? el.value : ""; }
+
+/* ---------------- AI pipeline animation ---------------- */
+
+function runAiPipeline(id){
+  const modal = document.getElementById("modal");
+  modal.innerHTML = `
+    <div class="progress-modal">
+      <div class="spinner"></div>
+      <div class="stage" id="stageTxt">Rectifying image…</div>
+    </div>`;
+  document.getElementById("overlay").classList.add("open");
+  const stages = ["Rectifying image (deskew · crop · contrast)…","Running OCR text extraction…","Layout-aware multimodal classification…","Applying confidence gate…"];
+  let i = 0;
+  const stageEl = document.getElementById("stageTxt");
+  const timer = setInterval(()=>{
+    i++;
+    if(i < stages.length){ stageEl.textContent = stages[i]; return; }
+    clearInterval(timer);
+    finishPipeline(id);
+  }, 550);
+}
+async function finishPipeline(id){
+  try{
+    const confidence = Math.floor(55 + Math.random()*44);
+    const status = confidence < 70 ? "unverified" : "routed";
+    await addLog(id, "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run.");
+    await addLog(id, confidence < 70
+      ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
+      : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
+    await sb.from("requests").update({ confidence, status }).eq("id", id);
+  }catch(e){}
+  await refresh();
+  closeModal();
+  renderRoot();
+  openDetail(id);
+}
+
+/* ---------------- Staff / Dean actions ---------------- */
+
+async function confirmAndRoute(id){
+  try{
+    const req = state.requests.find(r=>r.id===id);
+    await addLog(id, `Intake clerk manually confirmed the document type - routed to ${req.route[0]}.`);
+    await sb.from("requests").update({ status:"routed" }).eq("id", id);
+    await refresh();
+  }catch(e){}
+  renderRoot();
+}
+async function advanceRequest(id){
+  try{
+    const req = state.requests.find(r=>r.id===id);
+    if(req.status === "routed"){
+      await addLog(id, `${req.route[req.hop]} marked the request In Progress.`);
+      await sb.from("requests").update({ status:"progress" }).eq("id", id);
+    } else if(req.hop < req.route.length - 1){
+      await addLog(id, `${req.route[req.hop]} cleared the request - forwarded to ${req.route[req.hop+1]}.`);
+      await sb.from("requests").update({ status:"routed", hop: req.hop+1 }).eq("id", id);
+    } else {
+      await addLog(id, `${req.route[req.hop]} gave final approval. Audit trail closed.`);
+      await sb.from("requests").update({ status:"completed" }).eq("id", id);
+    }
+    await refresh();
+  }catch(e){}
+  renderRoot();
+}
+async function declineRequest(id){
+  const reason = prompt("Reason for declining this request:", "Incomplete requirements attached.");
+  if(reason===null) return;
+  try{
+    const req = state.requests.find(r=>r.id===id);
+    await addLog(id, `${req.route[req.hop]} declined the request - reason: '${reason}'.`);
+    await sb.from("requests").update({ status:"declined" }).eq("id", id);
+    await refresh();
+  }catch(e){}
+  renderRoot();
+}
+
+/* ---------------- Detail modal + QR ---------------- */
+
+function routeListHtml(req){
+  return `<div class="route-list">${req.route.map((office,i)=>{
+    let dotClass = "", tag = "Next", tagClass = "";
+    if(req.status==="completed"){ dotClass="done"; tag="Done"; tagClass="done"; }
+    else if(i < req.hop){ dotClass="done"; tag="Done"; tagClass="done"; }
+    else if(i === req.hop){
+      if(req.status==="declined"){ dotClass="bad"; tag="Declined"; }
+      else { dotClass="current"; tag="Current"; tagClass="current"; }
+    }
+    const cap = i < req.hop ? "Cleared this office."
+              : (i === req.hop ? (req.status==="declined" ? "Declined at this office." : "Awaiting action at this office.")
+              : "Awaiting arrival.");
+    return `
+      <div class="route-item">
+        <div class="route-dot ${dotClass}"></div>
+        <div class="route-body">
+          <div>
+            <div class="route-name">${office}</div>
+            <div class="route-cap">${cap}</div>
+          </div>
+          <div class="route-tag ${tagClass}">${tag}</div>
+        </div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+function openDetail(id){
+  const req = state.requests.find(r=>r.id===id);
+  const modal = document.getElementById("modal");
+  modal.innerHTML = `
+    <div class="modal-head">
+      <h2>${TYPE_LABEL[req.type]} <span class="mono" style="font-size:13px;color:var(--ink-faint)">${req.id}</span></h2>
+      <button class="modal-close" data-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div>${pill(req.status)} <span style="margin-left:10px;font-size:13px;color:var(--ink-soft)">Currently at: <b>${currentOfficeLabel(req)}</b></span></div>
+
+      <div class="kv-card">
+        <div class="kv-row"><span class="k">Student</span><span class="v">${req.student}</span></div>
+        <div class="kv-row"><span class="k">Student No.</span><span class="v mono">${req.studentNo}</span></div>
+        <div class="kv-row"><span class="k">Program</span><span class="v">${req.program}</span></div>
+        <div class="kv-row"><span class="k">Current Office</span><span class="v">${currentOfficeLabel(req)}</span></div>
+      </div>
+
+      ${req.confidence!==null ? `
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft)"><span>Classification confidence</span><span class="mono">${req.confidence}%</span></div>
+          <div class="conf-bar"><div style="width:${req.confidence}%; background:${req.confidence<70?'var(--bad)':'var(--good)'}"></div></div>
+        </div>` : ""}
+
+      <div>
+        <div class="panel-title">Paper Route</div>
+        ${routeListHtml(req)}
+      </div>
+
+      <div class="qr-wrap">
+        <div id="qrHolder"></div>
+        <div style="font-size:13px;color:var(--ink-soft)">Scan to link this physical form to its digital-twin record.<br><span class="mono" style="font-size:11.5px">${req.id}</span></div>
+      </div>
+
+      ${req.documentPath ? `<div><button class="btn secondary small" id="viewDocBtn">View attached form</button></div>` : ""}
+
+      <div>
+        <div class="panel-title">Audit Trail</div>
+        <div class="timeline">
+          ${req.log.map(l=>`
+            <div class="tl-item">
+              <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+              <div class="tl-body"><div class="txt">${l.text}</div><div class="ts">${fmtTs(l.ts)}</div></div>
+            </div>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close>Close</button>
+    </div>
+  `;
+  document.getElementById("overlay").classList.add("open");
+  try{
+    new QRCode(document.getElementById("qrHolder"), { text: req.id, width:84, height:84, colorDark:"#20241F", colorLight:"#ffffff" });
+  }catch(e){ document.getElementById("qrHolder").textContent = req.id; }
+  const viewDocBtn = document.getElementById("viewDocBtn");
+  if(viewDocBtn) viewDocBtn.addEventListener("click", async ()=>{
+    const { data, error } = await sb.storage.from("documents").createSignedUrl(req.documentPath, 60);
+    if(!error && data && data.signedUrl) window.open(data.signedUrl, "_blank");
+    else alert("Could not load the attached document.");
+  });
+}
+
+/* ---------------- Wiring ---------------- */
+
+function closeModal(){
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("modal").innerHTML = "";
+}
+function wireViewEvents(){
+  document.querySelectorAll("[data-open]").forEach(el=>{
+    el.addEventListener("click", ()=> openDetail(el.dataset.open));
+  });
+  document.querySelectorAll("[data-confirm]").forEach(el=>{
+    el.addEventListener("click", (e)=>{ e.stopPropagation(); confirmAndRoute(el.dataset.confirm); });
+  });
+  document.querySelectorAll("[data-advance]").forEach(el=>{
+    el.addEventListener("click", (e)=>{ e.stopPropagation(); advanceRequest(el.dataset.advance); });
+  });
+  document.querySelectorAll("[data-decline]").forEach(el=>{
+    el.addEventListener("click", (e)=>{ e.stopPropagation(); declineRequest(el.dataset.decline); });
+  });
+  const newBtn = document.getElementById("newReqBtn");
+  if(newBtn) newBtn.addEventListener("click", openNewRequestModal);
+  const resetBtn = document.getElementById("resetBtn");
+  if(resetBtn) resetBtn.addEventListener("click", async ()=>{
+    if(!confirm("Reset the demo requests? This clears every request in the shared Supabase project. Accounts are kept.")) return;
+    try{ await resetDemoRequests(); await refresh(); }catch(e){ alert(e.message || "Could not reach Supabase to reset it."); }
+    renderRoot();
+  });
+  const newAcctBtn = document.getElementById("newAcctBtn");
+  if(newAcctBtn) newAcctBtn.addEventListener("click", ()=> openAccountModal(null));
+  document.querySelectorAll("[data-edit-acct]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const acct = state.accounts.find(a=>a.id===el.dataset.editAcct);
+      openAccountModal(acct);
+    });
+  });
+  document.querySelectorAll("[data-delete-acct]").forEach(el=>{
+    el.addEventListener("click", ()=> deleteAccount(el.dataset.deleteAcct));
+  });
+}
+
+document.getElementById("overlay").addEventListener("click", (e)=>{
+  if(e.target.id==="overlay" || e.target.closest("[data-close]")) closeModal();
+});
+
+async function init(){
+  if(!SUPABASE_CONFIGURED){ renderRoot(); return; }
+  await loadSession();
+  if(session){
+    state.page = PAGES[session.role][0].id;
+    try{
+      await refresh();
+      if(session.role === "admin") await refreshAccounts();
+    }catch(e){ apiOnline = false; }
+  }
+  renderRoot();
+}
+init();
+</script>
+</body>
+</html>
