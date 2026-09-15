@@ -6,6 +6,7 @@
 <title>DocuRoute Prototype</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <style>
@@ -282,6 +283,47 @@
   .acct-row .actions{ display:flex; gap:6px; justify-content:flex-end; }
   .role-tag{ display:inline-block; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); text-transform:capitalize; }
 
+  /* ---------------- Mobile staff app (viewport-driven, forced dark, staff-only) ---------------- */
+  .mobile-badge{
+    display:inline-flex; align-items:center; gap:8px; padding:5px 12px 5px 5px;
+    border-radius:999px; background:var(--surface-2); border:1px solid var(--line);
+  }
+  .mobile-badge .rev-mark{
+    width:22px; height:22px; border-radius:7px; background:var(--ink); color:var(--bg);
+    display:flex; align-items:center; justify-content:center; font-family:"Lora",serif; font-weight:700; font-size:12px; flex:0 0 auto;
+  }
+  .mobile-badge .rev-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); font-weight:600; }
+  .mobile-login-wrap{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px; }
+
+  .mapp-shell{ min-height:100vh; display:flex; flex-direction:column; background:var(--bg); }
+  .mapp-topbar{ display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
+  .mapp-topbar .rev-mark{ width:28px; height:28px; font-size:14px; border-radius:8px; }
+  .mapp-topbar .brand-word{ font-family:"Lora",serif; font-weight:700; font-size:16px; color:var(--ink); }
+  .mapp-topbar .spacer{ flex:1; }
+  .mapp-body{ flex:1; padding:22px 18px 44px; display:flex; flex-direction:column; gap:14px; max-width:520px; margin:0 auto; width:100%; }
+  .mapp-body h2{ font-size:19px; margin:0; }
+  .mapp-sub{ font-size:12.5px; color:var(--ink-faint); margin:-8px 0 4px; }
+  .mapp-menu-btn{
+    display:flex; align-items:center; gap:14px; padding:18px; border-radius:14px;
+    background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); text-align:left;
+  }
+  .mapp-menu-btn .ic{
+    width:42px; height:42px; border-radius:11px; background:var(--surface-2); color:var(--brand-strong);
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .mapp-menu-btn .ic svg{ width:22px; height:22px; }
+  .mapp-menu-btn .lbl{ font-size:14.5px; font-weight:600; color:var(--ink); }
+  .mapp-menu-btn .sub{ font-size:11.5px; color:var(--ink-faint); margin-top:2px; }
+  .mapp-back{ background:none; border:none; color:var(--ink-soft); font-size:13px; font-weight:600; padding:4px 0; text-align:left; align-self:flex-start; }
+  .mapp-back:hover{ color:var(--ink); }
+  .mapp-viewfinder{ position:relative; border-radius:16px; overflow:hidden; background:#000; min-height:280px; display:flex; align-items:center; justify-content:center; }
+  .mapp-viewfinder video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .mapp-viewfinder .hint{ position:absolute; bottom:10px; left:0; right:0; text-align:center; font-size:11.5px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+  .mapp-viewfinder .cam-error{ padding:22px; text-align:center; color:var(--ink-faint); font-size:12.5px; background:var(--surface-2); width:100%; }
+  .mapp-scan-result{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
+  .mapp-manual{ display:flex; gap:8px; }
+  .mapp-manual input{ flex:1; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font:inherit; font-size:14px; }
+
   @media (max-width:900px){
     .app-shell{ flex-direction:column; }
     .sidebar{ position:relative; width:100%; flex:0 0 auto; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px 14px; gap:6px; }
@@ -332,7 +374,9 @@ const ICONS = {
   shield:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>`,
   grid:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
   users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M4 19c0-3 2.3-5 5-5s5 2 5 5"/><circle cx="17" cy="9" r="2.3"/><path d="M15.3 19c.2-2 1.5-3.4 3.3-3.9"/></svg>`,
-  info:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>`
+  info:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>`,
+  camera:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>`,
+  qr:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><path d="M15 15h3v3M20 15v6M15 20h3M20 20v1"/></svg>`
 };
 
 // Portal access rules: a logged-in account only ever sees its own role's pages.
@@ -427,6 +471,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 function renderRoot(){
   const root = document.getElementById("root");
   if(!SUPABASE_CONFIGURED){ root.innerHTML = configNeededHtml(); return; }
+  if(isMobile()) return renderMobileRoot();
   if(!session){
     root.innerHTML = `<div class="login-shell"><div class="login-card" id="loginCard"></div></div>`;
     renderLogin();
@@ -469,6 +514,11 @@ function renderLogin(){
       if(error) throw error;
       await hydrateProfile(data.user);
       if(!session) throw new Error("No profile found for this account — see supabase/schema.sql.");
+      if(isMobile() && session.role !== "staff"){
+        await sb.auth.signOut();
+        session = null;
+        throw new Error("This mobile view is for Staff accounts only. Please use a desktop browser for the Student/Admin portal.");
+      }
       loginError = ""; apiOnline = true;
       await bootAfterLogin();
     }catch(e){
@@ -566,6 +616,245 @@ function wireOfflineRetry(){
     try{ await refresh(); if(session.role==="admin") await refreshAccounts(); }catch(e){}
     renderRoot();
   });
+}
+
+/* =======================================================================
+   Mobile staff app — viewport-driven (narrow screens only), forced dark
+   theme, staff-only. This is where OCR intake capture and live QR-code
+   scanning actually happen, matching Section 3.10's field-use case: staff
+   photographing a paper form or scanning a document's QR label in the office.
+   ======================================================================= */
+
+const MOBILE_QUERY = window.matchMedia("(max-width: 680px)");
+function isMobile(){ return MOBILE_QUERY.matches; }
+function applyViewportTheme(){
+  if(isMobile()) document.documentElement.setAttribute("data-theme", "dark");
+  else document.documentElement.removeAttribute("data-theme");
+}
+
+let mobileScreen = "menu";
+let qrStreamHandle = null;
+
+function mobileBadgeHtml(){
+  return `<div class="mobile-badge"><span class="rev-mark">&Omega;</span><span class="rev-label">Mobile Version</span></div>`;
+}
+
+function renderMobileRoot(){
+  const root = document.getElementById("root");
+  if(!session){
+    root.innerHTML = `<div class="mobile-login-wrap">${mobileBadgeHtml()}<div class="login-card" id="loginCard"></div></div>`;
+    renderLogin();
+    return;
+  }
+  if(session.role !== "staff"){
+    root.innerHTML = mobileRestrictedHtml();
+    const b = document.getElementById("mobileLogoutBtn");
+    if(b) b.addEventListener("click", logout);
+    return;
+  }
+  if(!apiOnline){
+    root.innerHTML = `<div class="mapp-shell">${mobileTopbarHtml()}<div class="mapp-body">${offlineHtml()}</div></div>`;
+    wireOfflineRetry();
+    return;
+  }
+  root.innerHTML = mobileAppShellHtml();
+  wireMobileView();
+}
+
+function mobileRestrictedHtml(){
+  return `
+    <div class="mobile-login-wrap">
+      ${mobileBadgeHtml()}
+      <div class="offline-card">
+        <h2>Staff-only view</h2>
+        <p>The mobile experience is limited to Staff accounts — it's built for photographing paper forms and scanning QR labels in the field. You're signed in as <b>${session.name}</b> (${session.role}).</p>
+        <p>Open this page on a desktop browser to reach your ${session.role === "admin" ? "Admin" : "Student"} portal instead.</p>
+        <button class="btn" id="mobileLogoutBtn">Log out</button>
+      </div>
+    </div>`;
+}
+
+function mobileTopbarHtml(){
+  return `
+    <div class="mapp-topbar">
+      <span class="rev-mark">&Omega;</span>
+      <span class="brand-word">DocuRoute</span>
+      <span class="spacer"></span>
+      ${mobileBadgeHtml()}
+    </div>`;
+}
+
+function mobileAppShellHtml(){
+  return `<div class="mapp-shell">${mobileTopbarHtml()}<div class="mapp-body" id="mappBody">${mobileScreenHtml()}</div></div>`;
+}
+
+function mobileScreenHtml(){
+  if(mobileScreen === "capture") return mobileCaptureHtml();
+  if(mobileScreen === "scan") return mobileScanHtml();
+  return mobileMenuHtml();
+}
+
+function mobileMenuHtml(){
+  return `
+    <h2>Field Intake</h2>
+    <div class="mapp-sub">Signed in as ${session.name} — Staff</div>
+    <button class="mapp-menu-btn" data-mscreen="capture">
+      <span class="ic">${ICONS.camera}</span>
+      <span><span class="lbl">Photograph Physical Form</span><br><span class="sub">Capture a paper waiver, adjustment, or clearance — runs the same AI intake pipeline as the desktop</span></span>
+    </button>
+    <button class="mapp-menu-btn" data-mscreen="scan">
+      <span class="ic">${ICONS.qr}</span>
+      <span><span class="lbl">Scan QR Label</span><br><span class="sub">Look up a document already tagged with a QR code and advance it at this office</span></span>
+    </button>
+    <button class="mapp-back" id="mobileLogoutBtn2">&larr; Log out</button>
+  `;
+}
+
+function mobileCaptureHtml(){
+  return `
+    <button class="mapp-back" data-mscreen="menu">&larr; Back</button>
+    <h2>Photograph Physical Form</h2>
+    <div class="mapp-sub">Fill in the walk-in student's details, then attach the photo.</div>
+    <div class="field">
+      <label>Document type</label>
+      <select id="fType">
+        <option value="waiver">Prerequisite Waiver</option>
+        <option value="adjustment">Section Adjustment</option>
+        <option value="clearance">Student Clearance</option>
+      </select>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Full name</label><input id="fName" placeholder="Walk-in student's name"></div>
+      <div class="field"><label>Student No.</label><input id="fStudentNo" placeholder="e.g. 2023100123"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Program / Year</label><input id="fProgram" placeholder="e.g. BSIT / 3"></div>
+      <div class="field"><label>Contact No.</label><input id="fContact" value="09171234567"></div>
+    </div>
+    <div id="typeFields"></div>
+    <div class="field">
+      <label>Photograph the form</label>
+      <input type="file" id="fFile" accept="image/*" capture="environment">
+    </div>
+    <button class="btn" id="mobileSubmitBtn" style="justify-content:center;">Submit &amp; Run AI Classification</button>
+  `;
+}
+
+function mobileScanHtml(){
+  return `
+    <button class="mapp-back" data-mscreen="menu">&larr; Back</button>
+    <h2>Scan QR Label</h2>
+    <div class="mapp-viewfinder" id="mappViewfinder">
+      <video id="qrVideo" autoplay playsinline muted></video>
+      <div class="hint">Point the camera at a document's QR label</div>
+    </div>
+    <canvas id="qrCanvas" style="display:none;"></canvas>
+    <div class="mapp-manual">
+      <input id="manualQrInput" placeholder="Or type the tracking ID (e.g. DR-2026-0007)">
+      <button class="btn secondary small" id="manualQrBtn">Look up</button>
+    </div>
+    <div id="mappScanResult"></div>
+  `;
+}
+
+function wireMobileView(){
+  document.querySelectorAll("[data-mscreen]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      stopQrScanner();
+      mobileScreen = el.dataset.mscreen;
+      renderRoot();
+    });
+  });
+  const logoutBtn = document.getElementById("mobileLogoutBtn2");
+  if(logoutBtn) logoutBtn.addEventListener("click", ()=>{ stopQrScanner(); logout(); });
+  if(mobileScreen === "capture") wireMobileCapture();
+  if(mobileScreen === "scan") wireMobileScan();
+}
+
+function wireMobileCapture(){
+  const typeSel = document.getElementById("fType");
+  const typeFields = document.getElementById("typeFields");
+  typeFields.innerHTML = typeFieldsHtml(typeSel.value);
+  typeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(typeSel.value); });
+  document.getElementById("mobileSubmitBtn").addEventListener("click", ()=>{
+    mobileScreen = "menu";
+    handleSubmitRequest();
+  });
+}
+
+function wireMobileScan(){
+  document.getElementById("manualQrBtn").addEventListener("click", ()=>{
+    const v = document.getElementById("manualQrInput").value.trim();
+    if(v) handleQrDecoded(v);
+  });
+  document.getElementById("manualQrInput").addEventListener("keydown", (e)=>{
+    if(e.key === "Enter"){ const v = e.target.value.trim(); if(v) handleQrDecoded(v); }
+  });
+  startQrScanner();
+}
+
+async function startQrScanner(){
+  const video = document.getElementById("qrVideo");
+  const viewfinder = document.getElementById("mappViewfinder");
+  if(!video || !viewfinder) return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    viewfinder.innerHTML = `<div class="cam-error">Camera access needs a secure (HTTPS) context — this works once deployed to Vercel. Use the tracking ID field below for now.</div>`;
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    qrStreamHandle = stream;
+    video.srcObject = stream;
+    await video.play();
+    const canvas = document.getElementById("qrCanvas");
+    const ctx = canvas.getContext("2d");
+    const tick = ()=>{
+      if(mobileScreen !== "scan" || !qrStreamHandle) return;
+      if(video.readyState === video.HAVE_ENOUGH_DATA){
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = (typeof jsQR === "function") ? jsQR(imageData.data, imageData.width, imageData.height) : null;
+        if(code && code.data){ stopQrScanner(); handleQrDecoded(code.data); return; }
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }catch(e){
+    viewfinder.innerHTML = `<div class="cam-error">Couldn't access the camera (${e.message}). Use the tracking ID field below instead.</div>`;
+  }
+}
+function stopQrScanner(){
+  if(qrStreamHandle){ qrStreamHandle.getTracks().forEach(t=>t.stop()); qrStreamHandle = null; }
+}
+
+function handleQrDecoded(text){
+  const req = state.requests.find(r => r.id === text.trim());
+  const resultEl = document.getElementById("mappScanResult");
+  if(!resultEl) return;
+  if(!req){
+    resultEl.innerHTML = `<div class="mapp-scan-result">Unrecognized code: <span class="mono">${text}</span></div>`;
+    return;
+  }
+  const canAct = req.status !== "completed" && req.status !== "declined";
+  resultEl.innerHTML = `
+    <div class="mapp-scan-result">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-weight:600;">${TYPE_LABEL[req.type]}</div>${pill(req.status)}
+      </div>
+      <div class="kv-row"><span class="k">ID</span><span class="v mono">${req.id}</span></div>
+      <div class="kv-row"><span class="k">Student</span><span class="v">${req.student}</span></div>
+      <div class="kv-row"><span class="k">Current office</span><span class="v">${currentOfficeLabel(req)}</span></div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+        ${req.status === "unverified" ? `<button class="btn small" data-mconfirm="${req.id}">Confirm &amp; Route</button>` :
+          canAct ? `<button class="btn small" data-madvance="${req.id}">${req.status === "routed" ? "Mark In Progress" : "Advance"}</button>` : ""}
+        <button class="btn secondary small" data-mview="${req.id}">View Full Details</button>
+      </div>
+    </div>
+  `;
+  resultEl.querySelectorAll("[data-mconfirm]").forEach(b => b.addEventListener("click", () => confirmAndRoute(b.dataset.mconfirm)));
+  resultEl.querySelectorAll("[data-madvance]").forEach(b => b.addEventListener("click", () => advanceRequest(b.dataset.madvance)));
+  resultEl.querySelectorAll("[data-mview]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.mview)));
 }
 
 /* ---------------- Status helpers ---------------- */
@@ -1038,8 +1327,11 @@ async function handleSubmitRequest(){
   try{
     const { data: id, error: idErr } = await sb.rpc("next_request_id");
     if(idErr) throw new ApiError(idErr.message);
+    // A student submits their own request (student_id = them); staff capturing a
+    // walk-in's paper form on mobile has no portal account to link it to.
+    const studentIdForRow = session.role === "student" ? session.id : null;
     const { error: insErr } = await sb.from("requests").insert({
-      id, type, student_id: session.id, student_name: student, student_no: studentNo,
+      id, type, student_id: studentIdForRow, student_name: student, student_no: studentNo,
       program, contact_no: contactNo, fields, confidence: null, route: ROUTES[type], hop: 0, status: "submitted"
     });
     if(insErr) throw new ApiError(insErr.message);
@@ -1267,6 +1559,8 @@ document.getElementById("overlay").addEventListener("click", (e)=>{
 });
 
 async function init(){
+  applyViewportTheme();
+  MOBILE_QUERY.addEventListener("change", ()=>{ stopQrScanner(); applyViewportTheme(); renderRoot(); });
   if(!SUPABASE_CONFIGURED){ renderRoot(); return; }
   await loadSession();
   if(session){
