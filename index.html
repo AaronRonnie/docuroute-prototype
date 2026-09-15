@@ -300,9 +300,22 @@
   .mapp-topbar .rev-mark{ width:28px; height:28px; font-size:14px; border-radius:8px; }
   .mapp-topbar .brand-word{ font-family:"Lora",serif; font-weight:700; font-size:16px; color:var(--ink); }
   .mapp-topbar .spacer{ flex:1; }
+  .mapp-icon-btn{ background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 auto; }
+  .mapp-icon-btn:hover{ color:var(--ink); }
   .mapp-body{ flex:1; padding:22px 18px 44px; display:flex; flex-direction:column; gap:14px; max-width:520px; margin:0 auto; width:100%; }
   .mapp-body h2{ font-size:19px; margin:0; }
   .mapp-sub{ font-size:12.5px; color:var(--ink-faint); margin:-8px 0 4px; }
+  .mapp-tabs{ display:flex; gap:8px; margin-bottom:2px; }
+  .mapp-tab{ flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); padding:10px 12px; border-radius:10px; font-size:13px; font-weight:600; }
+  .mapp-tab.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .mapp-page-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:2px; }
+  .mapp-page-head h2{ margin:0; }
+  .mapp-badge-row{ display:flex; gap:8px; flex-wrap:wrap; margin:-4px 0 2px; }
+  .mapp-card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
+  .mapp-card-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .mapp-card-foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; font-size:12px; color:var(--ink-faint); }
+  .mapp-stepper-wrap{ overflow-x:auto; padding:14px 2px 2px; }
+  .mapp-stepper-wrap .stepper{ min-width:max-content; }
   .mapp-menu-btn{
     display:flex; align-items:center; gap:14px; padding:18px; border-radius:14px;
     background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); text-align:left;
@@ -514,11 +527,6 @@ function renderLogin(){
       if(error) throw error;
       await hydrateProfile(data.user);
       if(!session) throw new Error("No profile found for this account — see supabase/schema.sql.");
-      if(isMobile() && session.role !== "staff"){
-        await sb.auth.signOut();
-        session = null;
-        throw new Error("This mobile view is for Staff accounts only. Please use a desktop browser for the Student/Admin portal.");
-      }
       loginError = ""; apiOnline = true;
       await bootAfterLogin();
     }catch(e){
@@ -619,9 +627,11 @@ function wireOfflineRetry(){
 }
 
 /* =======================================================================
-   Mobile staff app — viewport-driven (narrow screens only), forced dark
-   theme, staff-only. This is where OCR intake capture and live QR-code
-   scanning actually happen, matching Section 3.10's field-use case: staff
+   Mobile app — viewport-driven (narrow screens only), forced dark theme,
+   every role welcome. Student and Admin get purpose-built, spacious mobile
+   layouts of their own pages (not the desktop grids squeezed narrower).
+   Staff additionally gets phone-specific tools — OCR intake capture and
+   live QR-code scanning — matching Section 3.10's field-use case: staff
    photographing a paper form or scanning a document's QR label in the office.
    ======================================================================= */
 
@@ -632,7 +642,7 @@ function applyViewportTheme(){
   else document.documentElement.removeAttribute("data-theme");
 }
 
-let mobileScreen = "menu";
+let mobileScreen = "menu"; // staff tool flow only: menu | capture | scan
 let qrStreamHandle = null;
 
 function mobileBadgeHtml(){
@@ -646,32 +656,14 @@ function renderMobileRoot(){
     renderLogin();
     return;
   }
-  if(session.role !== "staff"){
-    root.innerHTML = mobileRestrictedHtml();
-    const b = document.getElementById("mobileLogoutBtn");
-    if(b) b.addEventListener("click", logout);
-    return;
-  }
   if(!apiOnline){
     root.innerHTML = `<div class="mapp-shell">${mobileTopbarHtml()}<div class="mapp-body">${offlineHtml()}</div></div>`;
     wireOfflineRetry();
     return;
   }
+  if(!state.page || !PAGES[session.role].some(p => p.id === state.page)) state.page = PAGES[session.role][0].id;
   root.innerHTML = mobileAppShellHtml();
   wireMobileView();
-}
-
-function mobileRestrictedHtml(){
-  return `
-    <div class="mobile-login-wrap">
-      ${mobileBadgeHtml()}
-      <div class="offline-card">
-        <h2>Staff-only view</h2>
-        <p>The mobile experience is limited to Staff accounts — it's built for photographing paper forms and scanning QR labels in the field. You're signed in as <b>${session.name}</b> (${session.role}).</p>
-        <p>Open this page on a desktop browser to reach your ${session.role === "admin" ? "Admin" : "Student"} portal instead.</p>
-        <button class="btn" id="mobileLogoutBtn">Log out</button>
-      </div>
-    </div>`;
 }
 
 function mobileTopbarHtml(){
@@ -681,6 +673,7 @@ function mobileTopbarHtml(){
       <span class="brand-word">DocuRoute</span>
       <span class="spacer"></span>
       ${mobileBadgeHtml()}
+      <button class="mapp-icon-btn" id="mobileLogoutBtn3" title="Log out">&#8592;</button>
     </div>`;
 }
 
@@ -688,7 +681,114 @@ function mobileAppShellHtml(){
   return `<div class="mapp-shell">${mobileTopbarHtml()}<div class="mapp-body" id="mappBody">${mobileScreenHtml()}</div></div>`;
 }
 
+function mobileTabsHtml(pages, current){
+  return `<div class="mapp-tabs">${pages.map(p => `<button class="mapp-tab ${current===p.id?"active":""}" data-mtab="${p.id}">${p.label}</button>`).join("")}</div>`;
+}
+
 function mobileScreenHtml(){
+  if(session.role === "staff") return mobileStaffScreenHtml();
+  if(session.role === "student") return mobileTabsHtml(PAGES.student, state.page) + (state.page === "notifications" ? mobileStudentNotificationsHtml() : mobileStudentActiveHtml());
+  if(session.role === "admin") return mobileTabsHtml(PAGES.admin, state.page) + (state.page === "accounts" ? mobileAdminAccountsHtml() : mobileAdminOverviewHtml());
+  return "";
+}
+
+/* ---- Student: mobile ---- */
+
+function mobileStudentActiveHtml(){
+  const mine = myRequests();
+  const cards = mine.map(r => `
+    <div class="mapp-card">
+      <div class="mapp-card-head">
+        <div><div style="font-family:'Lora',serif;font-weight:600;font-size:15.5px;">${TYPE_LABEL[r.type]}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
+        ${pill(r.status)}
+      </div>
+      <div class="mapp-stepper-wrap">${stepperHtml(r.route, r.hop, r.status)}</div>
+      <div class="mapp-card-foot">
+        <span>Currently at <b>${currentOfficeLabel(r)}</b></span>
+        <button class="btn secondary small" data-open="${r.id}">Details</button>
+      </div>
+    </div>`).join("") || `<div class="empty">No requests yet — submit your first one.</div>`;
+  return `
+    <div class="mapp-page-head"><h2>Active Requests</h2><button class="btn small" id="newReqBtn">+ New</button></div>
+    ${cards}
+  `;
+}
+
+function mobileStudentNotificationsHtml(){
+  const mine = myRequests();
+  const newCount = mine.filter(r=>r.status==="submitted"||r.status==="review").length;
+  const unverifiedCount = mine.filter(r=>r.status==="unverified").length;
+  const routedCount = mine.filter(r=>r.status==="routed"||r.status==="progress"||r.status==="completed").length;
+  const cards = mine.map(r => `
+    <div class="mapp-card">
+      <div class="mapp-card-head">
+        <div><div style="font-weight:600;font-size:14px;">${TYPE_LABEL[r.type]}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
+        ${confPill(r)}
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">${statusCaption(r)}</div>
+      <div class="mapp-card-foot">
+        <span>${fmtAge(r.log[r.log.length-1].ts)} ago &middot; ${currentOfficeLabel(r)}</span>
+        <button class="btn secondary small" data-open="${r.id}">Details</button>
+      </div>
+    </div>`).join("") || `<div class="empty">Nothing to notify you about yet.</div>`;
+  return `
+    <div class="mapp-page-head"><h2>Notifications</h2></div>
+    <div class="mapp-badge-row">
+      <span class="count-badge">New <b>${newCount}</b></span>
+      <span class="count-badge">Unverified <b>${unverifiedCount}</b></span>
+      <span class="count-badge">Routed <b>${routedCount}</b></span>
+    </div>
+    ${cards}
+  `;
+}
+
+/* ---- Admin: mobile ---- */
+
+function mobileAdminOverviewHtml(){
+  const all = state.requests;
+  const total = all.length;
+  const withConf = all.filter(r=>r.confidence!==null);
+  const avgConf = withConf.length ? Math.round(withConf.reduce((s,r)=>s+r.confidence,0)/withConf.length) : 0;
+  const autoRouted = all.filter(r=>r.confidence!==null && r.confidence>=70).length;
+  const flagged = all.filter(r=>r.confidence!==null && r.confidence<70).length;
+  const completed = all.filter(r=>r.status==="completed").length;
+  return `
+    <div class="mapp-page-head"><h2>System Overview</h2></div>
+    <div class="stat-grid">
+      <div class="stat-tile"><div class="num">${total}</div><div class="lbl">Total</div></div>
+      <div class="stat-tile"><div class="num">${avgConf}%</div><div class="lbl">Avg. Confidence</div></div>
+      <div class="stat-tile"><div class="num">${autoRouted}</div><div class="lbl">Auto-routed</div></div>
+      <div class="stat-tile"><div class="num">${flagged}</div><div class="lbl">Flagged</div></div>
+      <div class="stat-tile"><div class="num">${completed}</div><div class="lbl">Completed</div></div>
+    </div>
+    <div class="mapp-card">
+      <div style="font-weight:600;margin-bottom:8px;">Temporary Database</div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;">Wipes and reseeds request/transaction data back to the four demo requests. Accounts are not affected.</div>
+      <button class="btn secondary small" id="resetBtn">&#8635; Reset demo database</button>
+    </div>
+    <div class="mapp-sub" style="margin-top:2px;">The full Role-Based Access reference table is on the desktop Admin view.</div>
+  `;
+}
+
+function mobileAdminAccountsHtml(){
+  const cards = state.accounts.map(a => `
+    <div class="mapp-card">
+      <div class="mapp-card-head">
+        <div><div style="font-weight:600;">${a.name}</div><div class="mono" style="font-size:11.5px;color:var(--ink-faint);margin-top:2px;">${a.username}</div></div>
+        <span class="role-tag">${a.role}</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">${a.studentNo ? "Student No. " + a.studentNo : "—"}</div>
+      <div class="mapp-card-foot"><span></span><button class="btn secondary small" data-edit-acct="${a.id}">Edit</button></div>
+    </div>`).join("") || `<div class="empty">No accounts yet.</div>`;
+  return `
+    <div class="mapp-page-head"><h2>Account Management</h2><button class="btn small" id="newAcctBtn">+ Add</button></div>
+    ${cards}
+  `;
+}
+
+/* ---- Staff: mobile field tools (menu | capture | scan) ---- */
+
+function mobileStaffScreenHtml(){
   if(mobileScreen === "capture") return mobileCaptureHtml();
   if(mobileScreen === "scan") return mobileScanHtml();
   return mobileMenuHtml();
@@ -706,7 +806,6 @@ function mobileMenuHtml(){
       <span class="ic">${ICONS.qr}</span>
       <span><span class="lbl">Scan QR Label</span><br><span class="sub">Look up a document already tagged with a QR code and advance it at this office</span></span>
     </button>
-    <button class="mapp-back" id="mobileLogoutBtn2">&larr; Log out</button>
   `;
 }
 
@@ -758,6 +857,13 @@ function mobileScanHtml(){
 }
 
 function wireMobileView(){
+  wireCommonActions();
+  const logoutBtn = document.getElementById("mobileLogoutBtn3");
+  if(logoutBtn) logoutBtn.addEventListener("click", ()=>{ stopQrScanner(); logout(); });
+  document.querySelectorAll("[data-mtab]").forEach(el=>{
+    el.addEventListener("click", ()=>{ state.page = el.dataset.mtab; renderRoot(); });
+  });
+  if(session.role !== "staff") return;
   document.querySelectorAll("[data-mscreen]").forEach(el=>{
     el.addEventListener("click", ()=>{
       stopQrScanner();
@@ -765,8 +871,6 @@ function wireMobileView(){
       renderRoot();
     });
   });
-  const logoutBtn = document.getElementById("mobileLogoutBtn2");
-  if(logoutBtn) logoutBtn.addEventListener("click", ()=>{ stopQrScanner(); logout(); });
   if(mobileScreen === "capture") wireMobileCapture();
   if(mobileScreen === "scan") wireMobileScan();
 }
@@ -1520,7 +1624,9 @@ function closeModal(){
   document.getElementById("overlay").classList.remove("open");
   document.getElementById("modal").innerHTML = "";
 }
-function wireViewEvents(){
+function wireViewEvents(){ wireCommonActions(); }
+
+function wireCommonActions(){
   document.querySelectorAll("[data-open]").forEach(el=>{
     el.addEventListener("click", ()=> openDetail(el.dataset.open));
   });
