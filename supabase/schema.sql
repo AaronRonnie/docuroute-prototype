@@ -203,6 +203,12 @@ create policy "documents read for visible requests"
     )
   );
 
+-- Without this, nobody (not even admin) can remove an uploaded file from the
+-- app — found during debugging when a leftover test upload couldn't be cleaned up.
+create policy "documents delete by admin"
+  on storage.objects for delete
+  using (bucket_id = 'documents' and public.current_user_role() = 'admin');
+
 -- =========================================================================
 -- NEXT STEPS (do these in the Supabase Dashboard, not in this SQL file)
 -- =========================================================================
