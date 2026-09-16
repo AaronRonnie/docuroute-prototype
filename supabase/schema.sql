@@ -10,6 +10,10 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null default '',
   role text not null default 'student' check (role in ('student','staff','admin')),
+  -- Only meaningful when role='staff'. Values match the office labels used in
+  -- ROUTES/route[] in index.html exactly, so "office = any(route)" works directly
+  -- with no separate mapping table — see current_user_office() / staff_can_see_request() below.
+  office text check (office in ('Registrar','Treasury','Section Chief','Dean''s Office')),
   name text not null default '',
   student_no text,
   program text,
@@ -46,6 +50,37 @@ as $$
 $$;
 
 grant execute on function public.current_user_role() to authenticated, anon;
+
+create or replace function public.current_user_office()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select office from public.profiles where id = auth.uid();
+$$;
+
+grant execute on function public.current_user_office() to authenticated, anon;
+
+-- Row-visibility rule shared by requests/request_logs/documents policies below:
+-- admin sees everything; a staff account sees a request only if its own office
+-- appears somewhere in that request's route (e.g. Treasury never sees a
+-- Prerequisite Waiver, since "Treasury" never appears in ROUTES.waiver).
+-- Registrar is in every route, so this also covers the unverified/intake queue
+-- with no separate carve-out needed.
+create or replace function public.staff_can_see_request(req_route text[])
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_user_role() = 'admin'
+      or (public.current_user_role() = 'staff' and public.current_user_office() = any(req_route));
+$$;
+
+grant execute on function public.staff_can_see_request(text[]) to authenticated, anon;
 
 alter table public.profiles enable row level security;
 
@@ -134,18 +169,20 @@ create table public.request_logs (
 alter table public.requests enable row level security;
 alter table public.request_logs enable row level security;
 
-create policy "requests select own or staff/admin"
+create policy "requests select own or office-scoped staff/admin"
   on public.requests for select
-  using (student_id = auth.uid() or public.current_user_role() in ('staff','admin'));
+  using (student_id = auth.uid() or public.staff_can_see_request(route));
 
+-- Insert stays role-broad (not office-scoped): any staff member can capture a
+-- walk-in's paper form at intake regardless of which office they belong to.
 create policy "requests insert own or staff/admin"
   on public.requests for insert
   with check (student_id = auth.uid() or public.current_user_role() in ('staff','admin'));
 
-create policy "requests update by staff/admin"
+create policy "requests update by office-scoped staff/admin"
   on public.requests for update
-  using (public.current_user_role() in ('staff','admin'))
-  with check (public.current_user_role() in ('staff','admin'));
+  using (public.staff_can_see_request(route))
+  with check (public.staff_can_see_request(route));
 
 create policy "requests delete by admin"
   on public.requests for delete
@@ -156,7 +193,7 @@ create policy "logs select for visible requests"
   using (exists (
     select 1 from public.requests r
     where r.id = request_logs.request_id
-      and (r.student_id = auth.uid() or public.current_user_role() in ('staff','admin'))
+      and (r.student_id = auth.uid() or public.staff_can_see_request(r.route))
   ));
 
 create policy "logs insert for visible requests"
@@ -164,7 +201,7 @@ create policy "logs insert for visible requests"
   with check (exists (
     select 1 from public.requests r
     where r.id = request_logs.request_id
-      and (r.student_id = auth.uid() or public.current_user_role() in ('staff','admin'))
+      and (r.student_id = auth.uid() or public.staff_can_see_request(r.route))
   ));
 
 create policy "logs delete by admin"
@@ -188,7 +225,7 @@ create policy "documents insert for visible requests"
     and exists (
       select 1 from public.requests r
       where r.id = (storage.foldername(name))[1]
-        and (r.student_id = auth.uid() or public.current_user_role() in ('staff','admin'))
+        and (r.student_id = auth.uid() or public.staff_can_see_request(r.route))
     )
   );
 
@@ -199,7 +236,7 @@ create policy "documents read for visible requests"
     and exists (
       select 1 from public.requests r
       where r.id = (storage.foldername(name))[1]
-        and (r.student_id = auth.uid() or public.current_user_role() in ('staff','admin'))
+        and (r.student_id = auth.uid() or public.staff_can_see_request(r.route))
     )
   );
 
@@ -214,16 +251,22 @@ create policy "documents delete by admin"
 -- =========================================================================
 -- 1. Authentication -> Providers -> Email -> turn OFF "Confirm email"
 --    (this prototype has no email server wired up to click confirmation links).
--- 2. Authentication -> Users -> Add user, create the three demo accounts below.
+-- 2. Authentication -> Users -> Add user, create the demo accounts below.
 --    Each one gets a blank profiles row automatically via the trigger above.
--- 3. Run the UPDATE statements below (SQL Editor) to set their role/name/etc.
+-- 3. Run the UPDATE statements below (SQL Editor) to set their role/office/name/etc.
 --    Swap in real UUIDs by copying them from Authentication -> Users, or run
 --    this as-is if you created the users with these exact emails.
 
 -- update public.profiles set role='student', name='Aaron Peter San Pedro',
 --   student_no='2021100234', program='BS Information Technology / 4'
 --   where email='apvsanpedro@mymail.mapua.edu.ph';
--- update public.profiles set role='staff', name='Staff Member'
---   where email='staff@mymail.mapua.edu.ph';
+-- update public.profiles set role='staff', office='Registrar', name='Registrar Clerk'
+--   where email='registrar@mymail.mapua.edu.ph';
+-- update public.profiles set role='staff', office='Treasury', name='Treasury Personnel'
+--   where email='treasury@mymail.mapua.edu.ph';
+-- update public.profiles set role='staff', office='Section Chief', name='Section Chief'
+--   where email='prof@mymail.mapua.edu.ph';
+-- update public.profiles set role='staff', office='Dean''s Office', name='Dean'
+--   where email='dean@mymail.mapua.edu.ph';
 -- update public.profiles set role='admin', name='System Administrator'
 --   where email='admin@mymail.mapua.edu.ph';

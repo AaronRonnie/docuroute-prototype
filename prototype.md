@@ -16,6 +16,8 @@
 8. **Free-tier Supabase projects pause after ~1 week of no API activity.** If the app suddenly can't reach the backend after a break, check the Supabase dashboard for a paused project first before assuming something broke.
 9. **Staff/Admin demo passwords are shorter than the public signup policy allows.** `staff`/`admin` (5 chars each) work because they were set via the Dashboard's admin-privileged flow, which bypasses the public password-length minimum. A real self-service signup on the login page would reject anything under 6 characters — don't be surprised if a *new* short password rejected there works fine when set from the Dashboard instead.
 10. **`git` isn't on PATH in every shell.** It installed to `C:\Users\09002214\AppData\Local\Programs\Git\bin\git.exe` — a shell opened before install won't see it as a bare `git` command. Open a new terminal, or use the full path.
+11. **A staff account with no `office` set sees "No Office Assigned," not an error.** Since RLS now scopes every staff query by `profiles.office`, a staff row created without one (e.g. via "+ Add Account"'s Dashboard-then-edit-here flow) can log in fine but sees nothing — that's `unassignedOfficeView()` working as intended, not a bug. Fix it in Account Management by setting the Office field, or directly via `update public.profiles set office='Registrar' where email='...'` in SQL Editor.
+12. **Office scoping is enforced at the RLS level, not just the queue filter.** A Treasury account's `select` on `requests` genuinely returns zero rows for a Prerequisite Waiver or Section Adjustment — Treasury never appears in either route. If a queue looks emptier than expected while testing, check you're logged in as the right office before assuming something's broken.
 
 ## 📘 Tutorials — how to actually do things
 
@@ -51,8 +53,13 @@ Log in as Admin → System Overview → "↺ Reset demo database". This wipes an
 |---|---|---|
 | Student | `apvsanpedro@mymail.mapua.edu.ph` | `aaron` |
 | Student | `mefvocal@mymail.mapua.edu.ph` | `mike` |
-| Staff | `staff@mymail.mapua.edu.ph` | `staff` |
+| Registrar Clerk | `registrar@mymail.mapua.edu.ph` | `registrar` |
+| Treasury Personnel | `treasury@mymail.mapua.edu.ph` | `treasury` |
+| Section Chief | `prof@mymail.mapua.edu.ph` | `prof` |
+| Dean | `dean@mymail.mapua.edu.ph` | `deanss` |
 | Admin | `admin@mymail.mapua.edu.ph` | `admin` |
+
+The old single `staff@mymail.mapua.edu.ph` account was renamed to `registrar@...` in place (edited in the Supabase Dashboard, never deleted-and-recreated — see warning #1) when the single shared "Staff" role was split into four office-scoped accounts.
 
 **Thesis feature status (Section 1.3's 6 core features — not 8; the "8" elsewhere is ISO/IEC 25010's evaluation characteristics, a separate list):**
 
@@ -71,6 +78,7 @@ Log in as Admin → System Overview → "↺ Reset demo database". This wipes an
 
 **Key file locations:**
 - App: `prototype/index.html`
-- DB schema + RLS policies: `prototype/supabase/schema.sql`
+- DB schema + RLS policies (fresh-install reference): `prototype/supabase/schema.sql`
+- Migration for an already-existing project: `prototype/supabase/migration-002-office-scoping.sql`
 - Supabase credentials: `prototype/supabase-config.js`
 - Legacy (unused) local backend: `prototype/server/` — kept for reference only

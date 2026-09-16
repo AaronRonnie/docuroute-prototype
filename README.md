@@ -29,18 +29,24 @@ Every viewer sees only their own role's pages — there's no portal switcher, ju
 |---|---|---|---|
 | Student | `apvsanpedro@mymail.mapua.edu.ph` | `aaron` | Active Requests, Notifications |
 | Student | `mefvocal@mymail.mapua.edu.ph` | `mike` | Active Requests, Notifications |
-| Staff | `staff@mymail.mapua.edu.ph` | `staff` | Intake Requests, Dean Decides |
+| Registrar Clerk | `registrar@mymail.mapua.edu.ph` | `registrar` | Registrar Queue |
+| Treasury Personnel | `treasury@mymail.mapua.edu.ph` | `treasury` | Treasury Queue |
+| Section Chief | `prof@mymail.mapua.edu.ph` | `prof` | Section Chief Review |
+| Dean | `dean@mymail.mapua.edu.ph` | `deanss` | Dean's Decision |
 | Admin | `admin@mymail.mapua.edu.ph` | `admin` | System Overview, Account Management |
 
-(Passwords are just what you chose in step 4 above — these are only suggestions to match the login card's hint text.) The Student account only ever sees its own requests, enforced at the database level by a Row Level Security policy (`student_id = auth.uid()`), not just hidden in the UI. The single Staff role intentionally collapses the thesis's three separate offices (Registrar Clerk, Accounting Personnel, Dean) into one login for demo convenience — see the note on the System Overview page.
+(Passwords are just what you chose in step 4 above — these are only suggestions to match the login card's hint text.) The Student account only ever sees its own requests, enforced at the database level by a Row Level Security policy (`student_id = auth.uid()`), not just hidden in the UI. Each Staff account is likewise scoped to exactly one office via its profile's `office` field — a Treasury account's query for a Section Adjustment request returns nothing, the same way a student's query for another student's request returns nothing. This replaces the earlier single shared "Staff" login that collapsed all offices into one account; see `supabase/migration-002-office-scoping.sql` if you're upgrading an existing project.
 
-**Account Management (Admin)** can edit an existing account's role/name/student no./program — that's a plain, RLS-guarded table update and works today. It **cannot** create or delete a login from the browser: Supabase's admin user-management API requires the `service_role` secret key, which must never be shipped to client-side code (it bypasses every RLS policy in the project). For now, new logins are created in the Supabase dashboard (step 4 above); a small privileged backend to do this from the Admin page itself is the natural next step — see "About Render" below.
+**Account Management (Admin)** can edit an existing account's role/office/name/student no./program — that's a plain, RLS-guarded table update and works today. It **cannot** create or delete a login from the browser: Supabase's admin user-management API requires the `service_role` secret key, which must never be shipped to client-side code (it bypasses every RLS policy in the project). For now, new logins are created in the Supabase dashboard (step 4 above); a small privileged backend to do this from the Admin page itself is the natural next step — see "About Render" below.
 
 ## What it demonstrates
 
 - **Student** — submit a Prerequisite Waiver / Section Adjustment / Clearance using the same fields as Mapua's actual Registrar forms, attach a photographed/scanned copy of the form (stored in Supabase Storage — this *is* Digital-Twin Archiving, Section 1.3), watch the simulated AI pipeline run, track status + scan the generated QR code, and see status changes on a separate Notifications page.
-- **Staff** — Intake Requests: confirm-and-route anything the AI flagged "Unverified" (<70% confidence) and manage the Registrar/Accounting queues; Dean Decides: approve/decline/clear anything currently at the Dean's Office, advancing multi-office requests (e.g. Clearance: Accounting → Dean's Office → Registrar) automatically. Any request with an attached scan shows a **View attached form** button in its detail dialog (opens a short-lived signed URL against the private bucket).
-- **Admin** — live stats (auto-routed vs. flagged, avg. confidence, completed), a read-only RBAC reference table, a demo-data reset button (re-seeds the four demo requests via the same Postgres functions as real submissions), and account editing (role/name/student no./program).
+- **Registrar Clerk** — Registrar Queue: confirm-and-route anything the AI flagged "Unverified" (<70% confidence), then approve/decline/clear anything currently at the Registrar step (every route ends at Registrar).
+- **Treasury Personnel** — Treasury Queue: approve/decline/clear a Student Clearance request currently at the Treasury step (first stop on that route).
+- **Section Chief** — Section Chief Review: consent to (or decline) a Section Adjustment request for their section before it proceeds to Registrar — a new office queue that didn't exist in the earlier single-Staff-role version.
+- **Dean** — Dean's Decision: inspect paper, apply a digital signature, and approve/decline/clear anything currently at the Dean's Office step, advancing multi-office requests (e.g. Clearance: Treasury → Dean's Office → Registrar) automatically. Any request with an attached scan shows a **View attached form** button in its detail dialog (opens a short-lived signed URL against the private bucket).
+- **Admin** — live stats (auto-routed vs. flagged, avg. confidence, completed), a read-only RBAC reference table, a demo-data reset button (re-seeds the four demo requests via the same Postgres functions as real submissions), and account editing (role/office/name/student no./program).
 
 ## Deploy to Vercel
 
