@@ -378,6 +378,19 @@ const ROUTES = {
   adjustment: ["Section Chief","Registrar"],
   clearance:  ["Treasury","Dean's Office","Registrar"]
 };
+// Registrar (capturing a walk-in) picks the destination office directly instead
+// of naming a "document type" — each office maps back to exactly one type/route,
+// since Dean's Office/Section Chief/Treasury are each the first hop of only one
+// route above.
+const OFFICE_TO_TYPE = { "Dean's Office":"waiver", "Section Chief":"adjustment", "Treasury":"clearance" };
+// A student submitting online never declares a type either — the (simulated)
+// AI Processing Layer is what's supposed to work that out, so declaring it up
+// front via a dropdown would defeat the point. This stands in for that guess
+// until the real classifier exists.
+function randomType(){
+  const types = Object.keys(ROUTES);
+  return types[Math.floor(Math.random() * types.length)];
+}
 
 const ICONS = {
   doc:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>`,
@@ -841,11 +854,11 @@ function mobileCaptureHtml(){
     <h2>Photograph Physical Form</h2>
     <div class="mapp-sub">Fill in the walk-in student's details, then attach the photo.</div>
     <div class="field">
-      <label>Document type</label>
-      <select id="fType">
-        <option value="waiver">Prerequisite Waiver</option>
-        <option value="adjustment">Section Adjustment</option>
-        <option value="clearance">Student Clearance</option>
+      <label>Which office should this go to?</label>
+      <select id="fOffice">
+        <option value="Dean's Office">Dean's Office</option>
+        <option value="Section Chief">Section Chief</option>
+        <option value="Treasury">Treasury</option>
       </select>
     </div>
     <div class="row2">
@@ -902,10 +915,10 @@ function wireMobileView(){
 }
 
 function wireMobileCapture(){
-  const typeSel = document.getElementById("fType");
+  const officeSel = document.getElementById("fOffice");
   const typeFields = document.getElementById("typeFields");
-  typeFields.innerHTML = typeFieldsHtml(typeSel.value);
-  typeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(typeSel.value); });
+  typeFields.innerHTML = typeFieldsHtml(OFFICE_TO_TYPE[officeSel.value]);
+  officeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(OFFICE_TO_TYPE[officeSel.value]); });
   document.getElementById("mobileSubmitBtn").addEventListener("click", ()=>{
     mobileScreen = "menu";
     handleSubmitRequest();
@@ -1434,14 +1447,6 @@ function newRequestModalHtml(){
   return `
     <div class="modal-head"><h2>New Request</h2><button class="modal-close" data-close>&times;</button></div>
     <div class="modal-body">
-      <div class="field">
-        <label>Document type</label>
-        <select id="fType">
-          <option value="waiver">Prerequisite Waiver</option>
-          <option value="adjustment">Section Adjustment</option>
-          <option value="clearance">Student Clearance</option>
-        </select>
-      </div>
       <div class="row2">
         <div class="field"><label>Full name</label><input id="fName" value="${session.name}" readonly></div>
         <div class="field"><label>Student No.</label><input id="fStudentNo" value="${session.studentNo || ""}" readonly></div>
@@ -1450,7 +1455,10 @@ function newRequestModalHtml(){
         <div class="field"><label>Program / Year</label><input id="fProgram" value="${session.program || ""}" readonly></div>
         <div class="field"><label>Contact No.</label><input id="fContact" value="09171234567"></div>
       </div>
-      <div id="typeFields"></div>
+      <div class="field">
+        <label>Request Details</label>
+        <textarea id="tDetails" placeholder="What do you need? e.g. a prerequisite waiver for IT201, a section change, or clearance for graduation..."></textarea>
+      </div>
       <div class="field">
         <label>Attach scanned / photographed form</label>
         <input type="file" id="fFile">
@@ -1481,24 +1489,29 @@ function typeFieldsHtml(type){
 function openNewRequestModal(){
   const modal = document.getElementById("modal");
   modal.innerHTML = newRequestModalHtml();
-  const typeSel = modal.querySelector("#fType");
-  const typeFields = modal.querySelector("#typeFields");
-  typeFields.innerHTML = typeFieldsHtml(typeSel.value);
-  typeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(typeSel.value); });
   document.getElementById("overlay").classList.add("open");
   modal.querySelector("#submitReqBtn").addEventListener("click", handleSubmitRequest);
 }
 
 async function handleSubmitRequest(){
-  const type = document.getElementById("fType").value;
+  // Staff capturing a walk-in (mobile field intake) picks the destination
+  // office directly (#fOffice); a student submitting online never does — see
+  // OFFICE_TO_TYPE / randomType() above.
+  const officeSel = document.getElementById("fOffice");
+  const isStaffCapture = !!officeSel;
+  const type = isStaffCapture ? OFFICE_TO_TYPE[officeSel.value] : randomType();
   const student = document.getElementById("fName").value || "Unnamed Student";
   const studentNo = document.getElementById("fStudentNo").value || "—";
   const program = document.getElementById("fProgram").value || "—";
   const contactNo = document.getElementById("fContact").value || "—";
   const fields = {};
-  if(type==="waiver"){ fields.quarterAY=val("tQuarter"); fields.prereq=val("tPrereq"); fields.advanced=val("tAdvanced"); }
-  if(type==="adjustment"){ fields.currentSection=val("tCurrent"); fields.newSection=val("tNew"); fields.subject=val("tSubject"); }
-  if(type==="clearance"){ fields.reason=val("tReason"); }
+  if(isStaffCapture){
+    if(type==="waiver"){ fields.quarterAY=val("tQuarter"); fields.prereq=val("tPrereq"); fields.advanced=val("tAdvanced"); }
+    if(type==="adjustment"){ fields.currentSection=val("tCurrent"); fields.newSection=val("tNew"); fields.subject=val("tSubject"); }
+    if(type==="clearance"){ fields.reason=val("tReason"); }
+  } else {
+    fields.details = val("tDetails") || "";
+  }
   const fileInput = document.getElementById("fFile");
   const file = fileInput && fileInput.files[0];
 
