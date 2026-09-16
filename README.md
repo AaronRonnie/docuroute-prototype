@@ -87,9 +87,18 @@ Accept the defaults (no framework / "Other") — it's a static folder, Vercel ne
 Two things in DocuRoute's design still need a real server process, not just Supabase's client SDK, because they require secrets or Python that can't live in the browser:
 
 1. **Privileged admin actions** — creating or deleting a login (needs the Supabase `service_role` key, held server-side only).
-2. **The actual AI Processing Layer** (Section 3.10) — image rectification (OpenCV) + OCR (Tesseract) + layout-aware classification, replacing today's `Math.random()` confidence score.
+2. **The actual AI Processing Layer** (Section 3.10) — image rectification (OpenCV) + OCR (Tesseract) + layout-aware classification.
 
 Render's free tier (a web service that sleeps after ~15 minutes idle, 750 free hours/month) is a solid fit for both: a small FastAPI service holding the service-role key for admin operations, and/or the Python AI microservice from Section 3.11's tools table, called from this page after a document lands in Supabase Storage. Supabase stays the database either way — Render would just run stateless code in front of it.
+
+**A local stand-in for #2 exists today** — `ai-classifier/` at the project root (a sibling of `prototype/`, kept out of this git repo) is a real OCR + text-similarity classifier, not `Math.random()`. `index.html` calls it at `http://localhost:5001/classify` for student submissions (staff walk-in captures already state the office/type explicitly, so those skip it). To use it while testing locally:
+
+```
+cd "C:\Users\09002214\Downloads\DocuRoute\ai-classifier"
+venv\Scripts\python.exe serve.py
+```
+
+Leave that running, then open `prototype/index.html` via `file://` as usual and submit a student request — it'll actually OCR/classify whatever file you attach instead of guessing randomly. If the server isn't running, the app quietly falls back to the old simulated confidence, so nothing breaks either way. **This only works for local `file://` testing** — the deployed Vercel site is HTTPS, and browsers block an HTTPS page from calling a plain `http://localhost` address (mixed content), so the live site will keep using the simulated fallback until this service is actually hosted somewhere (Render, per the plan above). See `ai-classifier/README.md` for how it works and its current limits (it's proven on clean template text, not yet on real handwritten/photographed submissions — those don't exist yet).
 
 Install Coding Agent Plugin
 

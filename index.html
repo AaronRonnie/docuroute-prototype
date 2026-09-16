@@ -392,6 +392,38 @@ function randomType(){
   return types[Math.floor(Math.random() * types.length)];
 }
 
+// Local stand-in for the Section 3.10 AI Processing Layer (see ai-classifier/
+// at the project root) -- only reachable while you're running its server on
+// your own machine (`python serve.py`) and testing this page via file://.
+// Once that service is hosted somewhere real (the planned Render backend),
+// this becomes an https:// URL instead and no other code here needs to change.
+const CLASSIFY_API_URL = "http://127.0.0.1:5001/classify";
+
+// Returns {type, confidence} from the real classifier, or null if it's
+// unreachable (server not running, CORS/mixed-content blocked, etc.) -- callers
+// fall back to the old simulated confidence so the demo never breaks.
+async function callClassifyApi({ file, text }){
+  try{
+    let res;
+    if(file){
+      const form = new FormData();
+      form.append("file", file, file.name);
+      res = await fetch(CLASSIFY_API_URL, { method:"POST", body: form });
+    } else {
+      res = await fetch(CLASSIFY_API_URL, {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ text: text || "" })
+      });
+    }
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data.type || typeof data.confidence !== "number") return null;
+    return { type: data.type, confidence: data.confidence };
+  }catch(e){
+    return null; // offline/unreachable -- caller falls back to simulation
+  }
+}
+
 const ICONS = {
   doc:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>`,
   bell:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3l-2 4h14l-2-4V8a5 5 0 0 0-5-5Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>`,
@@ -1534,14 +1566,19 @@ async function handleSubmitRequest(){
       if(!upErr) await sb.from("requests").update({ document_path: path }).eq("id", id);
     }
     await refresh();
-    runAiPipeline(id);
+    // Staff already told us the office/type directly (see OFFICE_TO_TYPE
+    // above) -- re-classifying on top of an explicit human decision would
+    // just be confusing, so only student (blind) submissions get run through
+    // the real/simulated classifier.
+    runAiPipeline(id, { file, text: fields.details, skipClassification: isStaffCapture });
   }catch(e){ alert(e.message || "Could not reach Supabase."); renderRoot(); }
 }
 function val(id){ const el = document.getElementById(id); return el ? el.value : ""; }
 
 /* ---------------- AI pipeline animation ---------------- */
 
-function runAiPipeline(id){
+function runAiPipeline(id, ctx){
+  ctx = ctx || {};
   const modal = document.getElementById("modal");
   modal.innerHTML = `
     <div class="progress-modal">
@@ -1556,18 +1593,31 @@ function runAiPipeline(id){
     i++;
     if(i < stages.length){ stageEl.textContent = stages[i]; return; }
     clearInterval(timer);
-    finishPipeline(id);
+    finishPipeline(id, ctx);
   }, 550);
 }
-async function finishPipeline(id){
+async function finishPipeline(id, ctx){
+  ctx = ctx || {};
   try{
-    const confidence = Math.floor(55 + Math.random()*44);
+    let type = null, confidence = null, usedRealClassifier = false;
+    if(!ctx.skipClassification){
+      const result = await callClassifyApi({ file: ctx.file, text: ctx.text });
+      if(result){ type = result.type; confidence = result.confidence; usedRealClassifier = true; }
+    }
+    if(confidence === null){
+      confidence = Math.floor(55 + Math.random()*44); // real classifier unreachable/skipped -- simulate as before
+    }
     const status = confidence < 70 ? "unverified" : "routed";
-    await addLog(id, "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run.");
+    const update = { confidence, status };
+    if(type && ROUTES[type]){ update.type = type; update.route = ROUTES[type]; }
+
+    await addLog(id, usedRealClassifier
+      ? `AI Processing Layer: OCR extracted, classified as ${TYPE_LABEL[type] || type} by the local classify service.`
+      : "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run (simulated -- local classify service unreachable or not applicable).");
     await addLog(id, confidence < 70
       ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
       : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
-    await sb.from("requests").update({ confidence, status }).eq("id", id);
+    await sb.from("requests").update(update).eq("id", id);
   }catch(e){}
   await refresh();
   closeModal();
