@@ -548,14 +548,33 @@ function scheduleRealtimeRefresh(){
   // Debounce: an insert plus its log rows arrive as several separate events
   // within milliseconds of each other -- collapse them into one refresh.
   clearTimeout(realtimeRefreshTimer);
-  realtimeRefreshTimer = setTimeout(async ()=>{
-    if(!session) return;
-    try{
-      await refresh();
-      if(session.role === "admin") await refreshAccounts();
-    }catch(e){ return; }
-    renderRoot();
-  }, 250);
+  realtimeRefreshTimer = setTimeout(syncNow, 250);
+}
+async function syncNow(){
+  if(!session) return;
+  try{
+    await refresh();
+    if(session.role === "admin") await refreshAccounts();
+  }catch(e){ return; }
+  renderRoot();
+}
+
+// Polling fallback: Realtime only delivers anything once both tables are
+// added to the supabase_realtime publication (migration-004-realtime.sql)
+// -- easy to forget, and silent (no error) if skipped, since the channel
+// still connects, it just never receives events. Polling every 15s means
+// cross-tab sync and the stuck-submission recovery sweep (both driven by
+// refresh(), see below) still work on a plain existing project even if that
+// migration hasn't been run, just less instantly than Realtime gives you.
+// Safe to call while a modal is open: #overlay/#modal live outside #root,
+// which is all renderRoot() touches.
+let pollTimer = null;
+function startPolling(){
+  if(pollTimer) return;
+  pollTimer = setInterval(syncNow, 15000);
+}
+function stopPolling(){
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
 }
 
 /* ---------------- Recovery: requests stuck at "AI Processing Layer" ---------------- */
@@ -694,6 +713,7 @@ function renderLogin(){
 
 async function logout(){
   unsubscribeRealtime();
+  stopPolling();
   await sb.auth.signOut();
   session = null;
   renderRoot();
@@ -702,6 +722,7 @@ async function logout(){
 async function bootAfterLogin(){
   state.page = pagesForSession(session)[0].id;
   subscribeRealtime();
+  startPolling();
   try{
     await refresh();
     if(session.role === "admin") await refreshAccounts();
