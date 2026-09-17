@@ -374,15 +374,20 @@
 
 // Section 1.9's deterministic routing table (Dean's Office/Registrar/Treasury/Section Chief).
 const ROUTES = {
-  waiver:     ["Dean's Office","Registrar"],
-  adjustment: ["Section Chief","Registrar"],
-  clearance:  ["Treasury","Dean's Office","Registrar"]
+  waiver:            ["Dean's Office","Registrar"],
+  adjustment:        ["Section Chief","Registrar"],
+  clearance:         ["Treasury","Dean's Office","Registrar"],
+  // Real-world signers (Instructor/Adviser) aren't roles DocuRoute models --
+  // Section Chief (the "Professor" account) is the closest existing stand-in
+  // for faculty-level academic sign-off, same shape as Section Adjustment.
+  course_completion: ["Section Chief","Registrar"],
+  // Course-equivalency evaluation is a program/college-level decision, same
+  // shape as Prerequisite Waiver.
+  crediting:         ["Dean's Office","Registrar"],
+  // Section 1.9's own definition: "subject to prescreening and acceptance by
+  // the receiving program or Dean's Office."
+  shift_program:     ["Dean's Office","Registrar"]
 };
-// Registrar (capturing a walk-in) picks the destination office directly instead
-// of naming a "document type" — each office maps back to exactly one type/route,
-// since Dean's Office/Section Chief/Treasury are each the first hop of only one
-// route above.
-const OFFICE_TO_TYPE = { "Dean's Office":"waiver", "Section Chief":"adjustment", "Treasury":"clearance" };
 // A student submitting online never declares a type either — the AI
 // Processing Layer is what's supposed to work that out, so declaring it up
 // front via a dropdown would defeat the point. Only used as a last-resort
@@ -473,7 +478,10 @@ const OFFICE_PORTAL_LABEL = {
 function portalLabel(s){
   return s.role === "staff" ? (OFFICE_PORTAL_LABEL[s.office] || "Staff Portal") : PORTAL_LABEL[s.role];
 }
-const TYPE_LABEL = { waiver:"Prerequisite Waiver", adjustment:"Section Adjustment", clearance:"Student Clearance" };
+const TYPE_LABEL = {
+  waiver:"Prerequisite Waiver", adjustment:"Section Adjustment", clearance:"Student Clearance",
+  course_completion:"Course Completion", crediting:"Transferee Crediting", shift_program:"Shift Program/Modality"
+};
 // A submitted-but-not-yet-classified request has type=null (see
 // finishPipeline() / the requests.type migration) -- fall back to a label
 // instead of rendering the literal string "undefined" during that window.
@@ -978,7 +986,7 @@ function mobileMenuHtml(){
     <div class="mapp-sub">Signed in as ${session.name} — ${session.office || "Staff (no office assigned)"}</div>
     <button class="mapp-menu-btn" data-mscreen="capture">
       <span class="ic">${ICONS.camera}</span>
-      <span><span class="lbl">Photograph Physical Form</span><br><span class="sub">Capture a paper waiver, adjustment, or clearance — runs the same AI intake pipeline as the desktop</span></span>
+      <span><span class="lbl">Photograph Physical Form</span><br><span class="sub">Capture any of the 6 recognized Mapúa forms — runs the same AI intake pipeline as the desktop</span></span>
     </button>
     <button class="mapp-menu-btn" data-mscreen="scan">
       <span class="ic">${ICONS.qr}</span>
@@ -993,11 +1001,9 @@ function mobileCaptureHtml(){
     <h2>Photograph Physical Form</h2>
     <div class="mapp-sub">Fill in the walk-in student's details, then attach the photo.</div>
     <div class="field">
-      <label>Which office should this go to?</label>
-      <select id="fOffice">
-        <option value="Dean's Office">Dean's Office</option>
-        <option value="Section Chief">Section Chief</option>
-        <option value="Treasury">Treasury</option>
+      <label>What type of document is this?</label>
+      <select id="fType">
+        ${Object.keys(ROUTES).map(t => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join("")}
       </select>
     </div>
     <div class="row2">
@@ -1054,10 +1060,10 @@ function wireMobileView(){
 }
 
 function wireMobileCapture(){
-  const officeSel = document.getElementById("fOffice");
+  const typeSel = document.getElementById("fType");
   const typeFields = document.getElementById("typeFields");
-  typeFields.innerHTML = typeFieldsHtml(OFFICE_TO_TYPE[officeSel.value]);
-  officeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(OFFICE_TO_TYPE[officeSel.value]); });
+  typeFields.innerHTML = typeFieldsHtml(typeSel.value);
+  typeSel.addEventListener("change", ()=>{ typeFields.innerHTML = typeFieldsHtml(typeSel.value); });
   document.getElementById("mobileSubmitBtn").addEventListener("click", ()=>{
     mobileScreen = "menu";
     handleSubmitRequest();
@@ -1623,7 +1629,25 @@ function typeFieldsHtml(type){
       <div class="field"><label>Requested section</label><input id="tNew" value="IT31FA2"></div>
     </div>
     <div class="field"><label>Subject code</label><input id="tSubject" value="IT201"></div>`;
-  return `<div class="field"><label>Reason for clearance</label><textarea id="tReason">Graduating this term.</textarea></div>`;
+  if(type==="clearance") return `<div class="field"><label>Reason for clearance</label><textarea id="tReason">Graduating this term.</textarea></div>`;
+  if(type==="course_completion") return `
+    <div class="row2">
+      <div class="field"><label>Subject code</label><input id="tCcSubject" value="IT201"></div>
+      <div class="field"><label>Completion deadline</label><input id="tCcDeadline" value="End of next term"></div>
+    </div>
+    <div class="field"><label>Completion task (per instructor)</label><input id="tCcTask" value="Final project resubmission"></div>`;
+  if(type==="crediting") return `
+    <div class="row2">
+      <div class="field"><label>Prior school/program</label><input id="tCrSchool" placeholder="e.g. STI College - BSIT"></div>
+      <div class="field"><label>Entrant type</label><input id="tCrEntrant" value="Transferee"></div>
+    </div>
+    <div class="field"><label>Courses to credit</label><input id="tCrCourses" placeholder="e.g. CS101, CS102"></div>`;
+  // shift_program
+  return `
+    <div class="row2">
+      <div class="field"><label>Current program</label><input id="tSpCurrent" value="BS Information Technology"></div>
+      <div class="field"><label>Requested program/modality</label><input id="tSpNew" placeholder="e.g. Blended / Fully-Online UOx"></div>
+    </div>`;
 }
 
 function openNewRequestModal(){
@@ -1634,21 +1658,18 @@ function openNewRequestModal(){
 }
 
 async function handleSubmitRequest(){
-  // Staff capturing a walk-in (mobile field intake) picks the destination
-  // office directly (#fOffice); a student submitting online never does — see
-  // OFFICE_TO_TYPE above, and finishPipeline() for how a student's type gets
-  // resolved (by the real classifier, or randomType() as a last-resort
+  // Staff capturing a walk-in (mobile field intake) picks the document type
+  // directly (#fType) -- it used to be an office picker translated through
+  // OFFICE_TO_TYPE, but that only worked while each office was the first hop
+  // of exactly one type. Once crediting/shift_program also start at Dean's
+  // Office (alongside waiver), that 1:1 mapping broke, so staff now name the
+  // type directly and the route is just ROUTES[type]. A student submitting
+  // online never does either — see finishPipeline() for how a student's type
+  // gets resolved (by the real classifier, or randomType() as a last-resort
   // simulated guess if it's unreachable).
-  const officeSel = document.getElementById("fOffice");
-  const isStaffCapture = !!officeSel;
-  // Staff capture already knows the office/type. A student's document is
-  // genuinely unclassified until the AI pipeline (finishPipeline, below) runs
-  // -- guessing a type here and writing it straight to the route column was
-  // the bug: on the deployed HTTPS site, the browser silently blocks the call
-  // to the local classify service (mixed content), callClassifyApi() always
-  // fails, and that random guess was never corrected -- every student
-  // submission got routed to a random office unrelated to the actual document.
-  const type = isStaffCapture ? OFFICE_TO_TYPE[officeSel.value] : null;
+  const typeSel = document.getElementById("fType");
+  const isStaffCapture = !!typeSel;
+  const type = isStaffCapture ? typeSel.value : null;
   const student = document.getElementById("fName").value || "Unnamed Student";
   const studentNo = document.getElementById("fStudentNo").value || "—";
   const program = document.getElementById("fProgram").value || "—";
@@ -1658,6 +1679,9 @@ async function handleSubmitRequest(){
     if(type==="waiver"){ fields.quarterAY=val("tQuarter"); fields.prereq=val("tPrereq"); fields.advanced=val("tAdvanced"); }
     if(type==="adjustment"){ fields.currentSection=val("tCurrent"); fields.newSection=val("tNew"); fields.subject=val("tSubject"); }
     if(type==="clearance"){ fields.reason=val("tReason"); }
+    if(type==="course_completion"){ fields.subject=val("tCcSubject"); fields.deadline=val("tCcDeadline"); fields.task=val("tCcTask"); }
+    if(type==="crediting"){ fields.priorSchool=val("tCrSchool"); fields.entrantType=val("tCrEntrant"); fields.courses=val("tCrCourses"); }
+    if(type==="shift_program"){ fields.currentProgram=val("tSpCurrent"); fields.newProgram=val("tSpNew"); }
   } else {
     fields.details = val("tDetails") || "";
   }
@@ -1695,9 +1719,9 @@ async function handleSubmitRequest(){
       if(!upErr) await sb.from("requests").update({ document_path: path }).eq("id", id);
     }
     await refresh();
-    // Staff already told us the office/type directly (see OFFICE_TO_TYPE
-    // above) -- re-classifying on top of an explicit human decision would
-    // just be confusing, so only student (blind) submissions get run through
+    // Staff already told us the type directly (#fType above) -- re-classifying
+    // on top of an explicit human decision would just be confusing, so only
+    // student (blind) submissions get run through
     // the real/simulated classifier.
     runAiPipeline(id, { file, text: fields.details, skipClassification: isStaffCapture });
   }catch(e){ alert(e.message || "Could not reach Supabase."); renderRoot(); }
@@ -1742,8 +1766,8 @@ async function finishPipeline(id, ctx){
         confidence = 0;
       } else {
         // Real classifier unreachable/skipped -- simulate as before. Staff
-        // capture already declared its type at submission (OFFICE_TO_TYPE) and
-        // is untouched here; a student submission with no reachable real
+        // capture already declared its type at submission (#fType) and is
+        // untouched here; a student submission with no reachable real
         // classifier gets the same random guess it always did, just made now
         // (at classification time) instead of at insert time, so a real
         // classifier that *does* respond a moment later always wins instead of

@@ -149,7 +149,7 @@ create table public.requests (
   -- finishPipeline() in index.html). A CHECK is satisfied, not violated, by
   -- a null value, so this still rejects anything other than the 3 real
   -- types once a type is actually set.
-  type text check (type in ('waiver','adjustment','clearance')),
+  type text check (type in ('waiver','adjustment','clearance','course_completion','crediting','shift_program')),
   student_id uuid references public.profiles(id),
   student_name text not null,
   student_no text,
