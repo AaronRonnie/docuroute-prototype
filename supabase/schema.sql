@@ -171,6 +171,12 @@ create table public.request_logs (
   ts timestamptz not null default now()
 );
 
+-- Lets index.html's subscribeRealtime() receive row-change broadcasts instead
+-- of every open tab/account only reflecting state as of its last manual
+-- reload. Realtime still enforces each subscriber's own RLS policies.
+alter publication supabase_realtime add table public.requests;
+alter publication supabase_realtime add table public.request_logs;
+
 alter table public.requests enable row level security;
 alter table public.request_logs enable row level security;
 

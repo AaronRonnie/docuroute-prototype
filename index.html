@@ -506,7 +506,7 @@ function mapRequestRow(row){
     id: row.id, type: row.type, student: row.student_name, studentNo: row.student_no,
     program: row.program, contactNo: row.contact_no, fields: row.fields || {},
     confidence: row.confidence, route: row.route, hop: row.hop, status: row.status,
-    documentPath: row.document_path,
+    documentPath: row.document_path, createdAt: row.created_at,
     log: logs.map(l => ({ ts: l.ts, text: l.text }))
   };
 }
@@ -521,6 +521,80 @@ async function refresh(){
   if(error) throw new ApiError(error.message);
   state.requests = data.map(mapRequestRow);
   apiOnline = true;
+  recoverStuckSubmissions(); // fire-and-forget safety net -- see below
+}
+
+/* ---------------- Realtime sync across tabs/accounts ---------------- */
+// Without this, one account's action (Section Chief consenting, Treasury
+// clearing, etc.) is invisible to every other open tab until it manually
+// reloads. Supabase Realtime broadcasts row changes on requests/request_logs
+// to every subscriber whose own RLS policies would let them SELECT that row,
+// so this only ever surfaces what that account could already see anyway --
+// requires the two tables added to the `supabase_realtime` publication (see
+// supabase/migration-004-realtime.sql).
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+function subscribeRealtime(){
+  if(realtimeChannel || !sb) return;
+  realtimeChannel = sb.channel("requests-live")
+    .on("postgres_changes", { event:"*", schema:"public", table:"requests" }, scheduleRealtimeRefresh)
+    .on("postgres_changes", { event:"*", schema:"public", table:"request_logs" }, scheduleRealtimeRefresh)
+    .subscribe();
+}
+function unsubscribeRealtime(){
+  if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+}
+function scheduleRealtimeRefresh(){
+  // Debounce: an insert plus its log rows arrive as several separate events
+  // within milliseconds of each other -- collapse them into one refresh.
+  clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(async ()=>{
+    if(!session) return;
+    try{
+      await refresh();
+      if(session.role === "admin") await refreshAccounts();
+    }catch(e){ return; }
+    renderRoot();
+  }, 250);
+}
+
+/* ---------------- Recovery: requests stuck at "AI Processing Layer" ---------------- */
+// A student submission is inserted with status="submitted" (type=null,
+// route=[]) *before* the AI pipeline runs; finishPipeline() is what resolves
+// it. If the tab is closed or reloaded mid-pipeline, nothing is left to ever
+// call finishPipeline again -- the row sits at "submitted" forever, and per
+// the queue filters in queuePageHtml(), that status is invisible to every
+// staff account (only the submitting student or an admin can even see a
+// route=[] row under RLS). This sweep re-runs classification for any such
+// row once it's clearly been abandoned, whenever a student or admin session
+// refreshes -- the same two roles RLS already lets see the row at all.
+const RECOVERY_STALE_MS = 8000; // well past the ~2.2s pipeline animation
+const recoveryAttempted = new Set();
+function recoverStuckSubmissions(){
+  if(!session || (session.role !== "student" && session.role !== "admin")) return;
+  state.requests
+    .filter(r => r.status === "submitted" && !recoveryAttempted.has(r.id)
+      && (Date.now() - new Date(r.createdAt).getTime()) > RECOVERY_STALE_MS)
+    .forEach(r => { recoveryAttempted.add(r.id); recoverStuckSubmission(r); });
+}
+async function recoverStuckSubmission(r){
+  try{
+    if(r.type){
+      // Staff-capture row: type/route were already set at insert, it just
+      // never got a confidence assigned before the interruption.
+      await finishPipeline(r.id, { skipClassification:true, silent:true });
+      return;
+    }
+    let file = null;
+    if(r.documentPath){
+      const { data, error } = await sb.storage.from("documents").download(r.documentPath);
+      if(!error && data) file = new File([data], r.documentPath.split("/").pop() || "document", { type: data.type || "application/octet-stream" });
+    }
+    const text = (r.fields && r.fields.details) || "";
+    await finishPipeline(r.id, { file, text, silent:true });
+  }catch(e){
+    recoveryAttempted.delete(r.id); // let the next sweep retry
+  }
 }
 async function refreshAccounts(){
   const { data, error } = await sb.from("profiles").select("*").order("name");
@@ -619,6 +693,7 @@ function renderLogin(){
 }
 
 async function logout(){
+  unsubscribeRealtime();
   await sb.auth.signOut();
   session = null;
   renderRoot();
@@ -626,6 +701,7 @@ async function logout(){
 
 async function bootAfterLogin(){
   state.page = pagesForSession(session)[0].id;
+  subscribeRealtime();
   try{
     await refresh();
     if(session.role === "admin") await refreshAccounts();
@@ -1680,6 +1756,10 @@ async function finishPipeline(id, ctx){
     await sb.from("requests").update(update).eq("id", id);
   }catch(e){}
   await refresh();
+  // A recovery sweep (recoverStuckSubmission) can call this for a request
+  // nobody's actively looking at -- don't yank the current user into a
+  // detail modal for someone else's resolved submission.
+  if(ctx.silent){ renderRoot(); return; }
   closeModal();
   renderRoot();
   openDetail(id);
