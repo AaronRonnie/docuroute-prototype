@@ -31,7 +31,7 @@ Every viewer sees only their own role's pages — there's no portal switcher, ju
 | Student | `mefvocal@mymail.mapua.edu.ph` | `mike` | Active Requests, Notifications |
 | Registrar Clerk | `registrar@mymail.mapua.edu.ph` | `registrar` | Registrar Queue |
 | Treasury Personnel | `treasury@mymail.mapua.edu.ph` | `treasury` | Treasury Queue |
-| Section Chief | `prof@mymail.mapua.edu.ph` | `prof` | Section Chief Review |
+| Section Chief | `prof@mymail.mapua.edu.ph` | `profff` | Section Chief Review |
 | Dean | `dean@mymail.mapua.edu.ph` | `deanss` | Dean's Decision |
 | Admin | `admin@mymail.mapua.edu.ph` | `admin` | System Overview, Account Management |
 

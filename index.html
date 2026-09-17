@@ -383,10 +383,12 @@ const ROUTES = {
 // since Dean's Office/Section Chief/Treasury are each the first hop of only one
 // route above.
 const OFFICE_TO_TYPE = { "Dean's Office":"waiver", "Section Chief":"adjustment", "Treasury":"clearance" };
-// A student submitting online never declares a type either — the (simulated)
-// AI Processing Layer is what's supposed to work that out, so declaring it up
-// front via a dropdown would defeat the point. This stands in for that guess
-// until the real classifier exists.
+// A student submitting online never declares a type either — the AI
+// Processing Layer is what's supposed to work that out, so declaring it up
+// front via a dropdown would defeat the point. Only used as a last-resort
+// guess inside finishPipeline() when the real classifier is unreachable —
+// never at submission time, since a guess made there could never be
+// corrected if the real classifier's response arrives too late or not at all.
 function randomType(){
   const types = Object.keys(ROUTES);
   return types[Math.floor(Math.random() * types.length)];
@@ -415,10 +417,14 @@ async function callClassifyApi({ file, text }){
         body: JSON.stringify({ text: text || "" })
       });
     }
-    if(!res.ok) return null;
+    if(!res.ok) return null; // network/server error -- caller falls back to simulation
     const data = await res.json();
-    if(!data.type || typeof data.confidence !== "number") return null;
-    return { type: data.type, confidence: data.confidence };
+    if(typeof data.confidence !== "number") return null; // malformed response -- fall back
+    // data.type may legitimately be null here: the real classifier explicitly
+    // decided this isn't one of our 3 types (matched the "other" prototype, or
+    // scored near-zero across the board). That's a real result, not a failure
+    // -- it must NOT be treated the same as "server unreachable" below.
+    return { type: data.type || null, confidence: data.confidence };
   }catch(e){
     return null; // offline/unreachable -- caller falls back to simulation
   }
@@ -582,7 +588,7 @@ function renderLogin(){
       Student — mefvocal@mymail.mapua.edu.ph / mike<br>
       Registrar — registrar@mymail.mapua.edu.ph / registrar<br>
       Treasury — treasury@mymail.mapua.edu.ph / treasury<br>
-      Section Chief — prof@mymail.mapua.edu.ph / prof<br>
+      Section Chief — prof@mymail.mapua.edu.ph / profff<br>
       Dean — dean@mymail.mapua.edu.ph / deanss<br>
       Admin — admin@mymail.mapua.edu.ph / admin
     </div>
@@ -1060,6 +1066,7 @@ function statusCaption(r){
   return prevIdx>=0 ? `${r.route[prevIdx]} → ${r.route[r.hop]}` : `Awaiting action at ${r.route[r.hop]}`;
 }
 function currentOfficeLabel(req){
+  if(req.status==="submitted" || req.status==="review") return "AI Processing Layer";
   if(req.status==="unverified") return "Intake Clerk queue";
   if(req.status==="completed" || req.status==="declined") return "Closed";
   return req.route[req.hop];
@@ -1528,10 +1535,19 @@ function openNewRequestModal(){
 async function handleSubmitRequest(){
   // Staff capturing a walk-in (mobile field intake) picks the destination
   // office directly (#fOffice); a student submitting online never does — see
-  // OFFICE_TO_TYPE / randomType() above.
+  // OFFICE_TO_TYPE above, and finishPipeline() for how a student's type gets
+  // resolved (by the real classifier, or randomType() as a last-resort
+  // simulated guess if it's unreachable).
   const officeSel = document.getElementById("fOffice");
   const isStaffCapture = !!officeSel;
-  const type = isStaffCapture ? OFFICE_TO_TYPE[officeSel.value] : randomType();
+  // Staff capture already knows the office/type. A student's document is
+  // genuinely unclassified until the AI pipeline (finishPipeline, below) runs
+  // -- guessing a type here and writing it straight to the route column was
+  // the bug: on the deployed HTTPS site, the browser silently blocks the call
+  // to the local classify service (mixed content), callClassifyApi() always
+  // fails, and that random guess was never corrected -- every student
+  // submission got routed to a random office unrelated to the actual document.
+  const type = isStaffCapture ? OFFICE_TO_TYPE[officeSel.value] : null;
   const student = document.getElementById("fName").value || "Unnamed Student";
   const studentNo = document.getElementById("fStudentNo").value || "—";
   const program = document.getElementById("fProgram").value || "—";
@@ -1556,7 +1572,7 @@ async function handleSubmitRequest(){
     const studentIdForRow = session.role === "student" ? session.id : null;
     const { error: insErr } = await sb.from("requests").insert({
       id, type, student_id: studentIdForRow, student_name: student, student_no: studentNo,
-      program, contact_no: contactNo, fields, confidence: null, route: ROUTES[type], hop: 0, status: "submitted"
+      program, contact_no: contactNo, fields, confidence: null, route: ROUTES[type] || [], hop: 0, status: "submitted"
     });
     if(insErr) throw new ApiError(insErr.message);
     await addLog(id, `Submitted by ${student} - document uploaded to DocuRoute.`);
@@ -1605,16 +1621,34 @@ async function finishPipeline(id, ctx){
       if(result){ type = result.type; confidence = result.confidence; usedRealClassifier = true; }
     }
     if(confidence === null){
-      confidence = Math.floor(55 + Math.random()*44); // real classifier unreachable/skipped -- simulate as before
+      // Real classifier unreachable/skipped -- simulate as before. Staff
+      // capture already declared its type at submission (OFFICE_TO_TYPE) and
+      // is untouched here; a student submission with no reachable real
+      // classifier gets the same random guess it always did, just made now
+      // (at classification time) instead of at insert time, so a real
+      // classifier that *does* respond a moment later always wins instead of
+      // this guess silently sticking forever (the original bug).
+      confidence = Math.floor(55 + Math.random()*44);
+      if(!ctx.skipClassification) type = randomType();
     }
-    const status = confidence < 70 ? "unverified" : "routed";
+    // Staff capture already has a valid type/route from insert (this
+    // function never re-derives it), so gate on confidence alone for that
+    // path. A student submission needs both a resolved type AND >=70%
+    // confidence to auto-route -- an explicit "not one of our 3 types"
+    // result (type stays null) or a below-gate confidence both fall to
+    // manual review instead of silently routing nowhere useful.
+    const status = ctx.skipClassification
+      ? (confidence < 70 ? "unverified" : "routed")
+      : (type && ROUTES[type] && confidence >= 70 ? "routed" : "unverified");
     const update = { confidence, status };
-    if(type && ROUTES[type]){ update.type = type; update.route = ROUTES[type]; }
+    if(!ctx.skipClassification && status === "routed"){ update.type = type; update.route = ROUTES[type]; }
 
     await addLog(id, usedRealClassifier
-      ? `AI Processing Layer: OCR extracted, classified as ${TYPE_LABEL[type] || type} by the local classify service.`
+      ? (type
+          ? `AI Processing Layer: OCR extracted, classified as ${TYPE_LABEL[type] || type} by the local classify service.`
+          : `AI Processing Layer: OCR extracted, but the local classify service did not recognize this as one of our 3 document types (best match ${confidence}%) - needs manual classification.`)
       : "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run (simulated -- local classify service unreachable or not applicable).");
-    await addLog(id, confidence < 70
+    await addLog(id, status !== "routed"
       ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
       : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
     await sb.from("requests").update(update).eq("id", id);

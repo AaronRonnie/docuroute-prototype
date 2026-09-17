@@ -55,7 +55,7 @@ Log in as Admin → System Overview → "↺ Reset demo database". This wipes an
 | Student | `mefvocal@mymail.mapua.edu.ph` | `mike` |
 | Registrar Clerk | `registrar@mymail.mapua.edu.ph` | `registrar` |
 | Treasury Personnel | `treasury@mymail.mapua.edu.ph` | `treasury` |
-| Section Chief | `prof@mymail.mapua.edu.ph` | `prof` |
+| Section Chief | `prof@mymail.mapua.edu.ph` | `profff` |
 | Dean | `dean@mymail.mapua.edu.ph` | `deanss` |
 | Admin | `admin@mymail.mapua.edu.ph` | `admin` |
 
