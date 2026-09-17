@@ -1764,6 +1764,27 @@ async function finishPipeline(id, ctx){
     const update = { confidence, status };
     if(!ctx.skipClassification && status === "routed"){ update.type = type; update.route = ROUTES[type]; }
 
+    // Atomic claim: only apply this result if the row is STILL "submitted".
+    // Without this, two tabs racing the recovery sweep for the same
+    // abandoned request (e.g. the same account open in multiple
+    // tabs/windows, each polling independently) could both run
+    // classification and both write -- the second one landing after the
+    // first, silently clobbering a correct result with a stale or
+    // contradictory one, and leaving duplicate/confusing audit log entries
+    // behind either way. .eq("status","submitted") makes this a
+    // compare-and-swap: whichever attempt's write reaches the database
+    // first wins, and .select("id") tells us here whether ours did.
+    const { data: claimed, error: claimErr } = await sb.from("requests")
+      .update(update).eq("id", id).eq("status", "submitted").select("id");
+    if(claimErr) throw claimErr;
+    if(!claimed || claimed.length === 0){
+      // Someone else already resolved this request -- nothing to log, our
+      // classification result (if any) is simply discarded.
+      await refresh();
+      if(!ctx.silent) renderRoot();
+      return;
+    }
+
     await addLog(id, noInput
       ? "AI Processing Layer: no file or description was attached - nothing to classify. Needs manual classification."
       : usedRealClassifier
@@ -1774,7 +1795,6 @@ async function finishPipeline(id, ctx){
     await addLog(id, status !== "routed"
       ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
       : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
-    await sb.from("requests").update(update).eq("id", id);
   }catch(e){}
   await refresh();
   // A recovery sweep (recoverStuckSubmission) can call this for a request
