@@ -1819,7 +1819,20 @@ async function finishPipeline(id, ctx){
     await addLog(id, status !== "routed"
       ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
       : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
-  }catch(e){}
+  }catch(e){
+    // Whatever failed (a rejected write, a missing DB migration, etc.),
+    // don't leave the request silently stuck at "Submitted"/"AI Processing
+    // Layer" forever with zero explanation -- that was a real bug: a
+    // classify result naming a type the live database's CHECK constraint
+    // didn't allow yet (e.g. a new type added before its migration was run)
+    // threw here, and this catch block used to just swallow it. Fall back
+    // to manual review, the same safety net as a low-confidence result, and
+    // log why so it's actually diagnosable next time.
+    try{
+      await addLog(id, `AI Processing Layer: could not save the classification result (${(e && e.message) || "unknown error"}) - needs manual classification.`);
+      await sb.from("requests").update({ confidence:0, status:"unverified" }).eq("id", id).eq("status","submitted");
+    }catch(e2){ /* nothing more we can do from here */ }
+  }
   await refresh();
   // A recovery sweep (recoverStuckSubmission) can call this for a request
   // nobody's actively looking at -- don't yank the current user into a
