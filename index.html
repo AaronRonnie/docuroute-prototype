@@ -474,6 +474,10 @@ function portalLabel(s){
   return s.role === "staff" ? (OFFICE_PORTAL_LABEL[s.office] || "Staff Portal") : PORTAL_LABEL[s.role];
 }
 const TYPE_LABEL = { waiver:"Prerequisite Waiver", adjustment:"Section Adjustment", clearance:"Student Clearance" };
+// A submitted-but-not-yet-classified request has type=null (see
+// finishPipeline() / the requests.type migration) -- fall back to a label
+// instead of rendering the literal string "undefined" during that window.
+function typeLabel(t){ return TYPE_LABEL[t] || "Classifying…"; }
 
 let session = null; // {id, username, role, name, studentNo, program}
 let state = { requests: [], accounts: [] };
@@ -776,7 +780,7 @@ function mobileStudentActiveHtml(){
   const cards = mine.map(r => `
     <div class="mapp-card">
       <div class="mapp-card-head">
-        <div><div style="font-family:'Lora',serif;font-weight:600;font-size:15.5px;">${TYPE_LABEL[r.type]}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
+        <div><div style="font-family:'Lora',serif;font-weight:600;font-size:15.5px;">${typeLabel(r.type)}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
         ${pill(r.status)}
       </div>
       <div class="mapp-stepper-wrap">${stepperHtml(r.route, r.hop, r.status)}</div>
@@ -799,7 +803,7 @@ function mobileStudentNotificationsHtml(){
   const cards = mine.map(r => `
     <div class="mapp-card">
       <div class="mapp-card-head">
-        <div><div style="font-weight:600;font-size:14px;">${TYPE_LABEL[r.type]}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
+        <div><div style="font-weight:600;font-size:14px;">${typeLabel(r.type)}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
         ${confPill(r)}
       </div>
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">${statusCaption(r)}</div>
@@ -1021,7 +1025,7 @@ function handleQrDecoded(text){
   resultEl.innerHTML = `
     <div class="mapp-scan-result">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:600;">${TYPE_LABEL[req.type]}</div>${pill(req.status)}
+        <div style="font-weight:600;">${typeLabel(req.type)}</div>${pill(req.status)}
       </div>
       <div class="kv-row"><span class="k">ID</span><span class="v mono">${req.id}</span></div>
       <div class="kv-row"><span class="k">Student</span><span class="v">${req.student}</span></div>
@@ -1102,7 +1106,7 @@ function studentActiveView(){
     <div class="req-step-card">
       <div class="req-step-top">
         <div class="req-step-name">
-          <span class="title">${TYPE_LABEL[r.type]}</span>
+          <span class="title">${typeLabel(r.type)}</span>
           <span class="id mono">${r.id}</span>
         </div>
         <button class="info-btn" data-open="${r.id}" title="View details">${ICONS.info}</button>
@@ -1138,7 +1142,7 @@ function studentNotificationsView(){
       ${mine.map(r=>`
         <div class="qrow" style="grid-template-columns:104px 1.3fr 68px 1fr 1.7fr 60px;">
           <div class="id mono">${r.id}</div>
-          <div class="who">${TYPE_LABEL[r.type]}</div>
+          <div class="who">${typeLabel(r.type)}</div>
           <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
           <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
           <div class="status-cell">${confPill(r)}<div class="cap">${statusCaption(r)}</div></div>
@@ -1172,7 +1176,7 @@ function queueRowsHtml(list, kind, actionLabel){
     ${list.map(r=>`
       <div class="qrow">
         <div class="id mono">${r.id}</div>
-        <div class="who">${TYPE_LABEL[r.type]}</div>
+        <div class="who">${typeLabel(r.type)}</div>
         <div class="who">${r.student}<div class="sub">${r.studentNo}</div></div>
         <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
         <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
@@ -1732,7 +1736,7 @@ function openDetail(id){
   const modal = document.getElementById("modal");
   modal.innerHTML = `
     <div class="modal-head">
-      <h2>${TYPE_LABEL[req.type]} <span class="mono" style="font-size:13px;color:var(--ink-faint)">${req.id}</span></h2>
+      <h2>${typeLabel(req.type)} <span class="mono" style="font-size:13px;color:var(--ink-faint)">${req.id}</span></h2>
       <button class="modal-close" data-close>&times;</button>
     </div>
     <div class="modal-body">

@@ -144,7 +144,12 @@ grant execute on function public.reset_request_seq() to authenticated;
 
 create table public.requests (
   id text primary key,
-  type text not null check (type in ('waiver','adjustment','clearance')),
+  -- Nullable: a student's online submission is inserted before the AI
+  -- pipeline runs, genuinely unclassified until it finishes (see
+  -- finishPipeline() in index.html). A CHECK is satisfied, not violated, by
+  -- a null value, so this still rejects anything other than the 3 real
+  -- types once a type is actually set.
+  type text check (type in ('waiver','adjustment','clearance')),
   student_id uuid references public.profiles(id),
   student_name text not null,
   student_no text,
