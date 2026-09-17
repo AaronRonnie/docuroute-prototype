@@ -1567,6 +1567,18 @@ async function handleSubmitRequest(){
   const fileInput = document.getElementById("fFile");
   const file = fileInput && fileInput.files[0];
 
+  // A student submission with neither a file nor a description has nothing
+  // for the AI Processing Layer to actually read -- letting it through used
+  // to still call the classifier (which correctly errored on empty input)
+  // and then fall back to a random simulated type/confidence, sometimes
+  // clearing the 70% gate and "routing" a request with no document behind
+  // it at all. Staff capture always has a real photo (its file input isn't
+  // optional in mobileCaptureHtml), so this only applies to students.
+  if(!isStaffCapture && !file && !fields.details.trim()){
+    alert("Please attach a scanned/photographed form, or describe your request, before submitting.");
+    return;
+  }
+
   closeModal();
   try{
     const { data: id, error: idErr } = await sb.rpc("next_request_id");
@@ -1619,21 +1631,29 @@ function runAiPipeline(id, ctx){
 async function finishPipeline(id, ctx){
   ctx = ctx || {};
   try{
+    // Nothing to actually classify -- handleSubmitRequest already blocks this
+    // for a fresh submission, but this stays as a backstop: don't fake a
+    // classifier decision (real or simulated) over empty input.
+    const noInput = !ctx.skipClassification && !ctx.file && !(ctx.text && ctx.text.trim());
     let type = null, confidence = null, usedRealClassifier = false;
-    if(!ctx.skipClassification){
+    if(!ctx.skipClassification && !noInput){
       const result = await callClassifyApi({ file: ctx.file, text: ctx.text });
       if(result){ type = result.type; confidence = result.confidence; usedRealClassifier = true; }
     }
     if(confidence === null){
-      // Real classifier unreachable/skipped -- simulate as before. Staff
-      // capture already declared its type at submission (OFFICE_TO_TYPE) and
-      // is untouched here; a student submission with no reachable real
-      // classifier gets the same random guess it always did, just made now
-      // (at classification time) instead of at insert time, so a real
-      // classifier that *does* respond a moment later always wins instead of
-      // this guess silently sticking forever (the original bug).
-      confidence = Math.floor(55 + Math.random()*44);
-      if(!ctx.skipClassification) type = randomType();
+      if(noInput){
+        confidence = 0;
+      } else {
+        // Real classifier unreachable/skipped -- simulate as before. Staff
+        // capture already declared its type at submission (OFFICE_TO_TYPE) and
+        // is untouched here; a student submission with no reachable real
+        // classifier gets the same random guess it always did, just made now
+        // (at classification time) instead of at insert time, so a real
+        // classifier that *does* respond a moment later always wins instead of
+        // this guess silently sticking forever (the original bug).
+        confidence = Math.floor(55 + Math.random()*44);
+        if(!ctx.skipClassification) type = randomType();
+      }
     }
     // Staff capture already has a valid type/route from insert (this
     // function never re-derives it), so gate on confidence alone for that
@@ -1647,11 +1667,13 @@ async function finishPipeline(id, ctx){
     const update = { confidence, status };
     if(!ctx.skipClassification && status === "routed"){ update.type = type; update.route = ROUTES[type]; }
 
-    await addLog(id, usedRealClassifier
-      ? (type
-          ? `AI Processing Layer: OCR extracted, classified as ${TYPE_LABEL[type] || type} by the local classify service.`
-          : `AI Processing Layer: OCR extracted, but the local classify service did not recognize this as one of our 3 document types (best match ${confidence}%) - needs manual classification.`)
-      : "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run (simulated -- local classify service unreachable or not applicable).");
+    await addLog(id, noInput
+      ? "AI Processing Layer: no file or description was attached - nothing to classify. Needs manual classification."
+      : usedRealClassifier
+        ? (type
+            ? `AI Processing Layer: OCR extracted, classified as ${TYPE_LABEL[type] || type} by the local classify service.`
+            : `AI Processing Layer: OCR extracted, but the local classify service did not recognize this as one of our 3 document types (best match ${confidence}%) - needs manual classification.`)
+        : "AI Processing Layer: image rectified, OCR extracted, layout-aware classification run (simulated -- local classify service unreachable or not applicable).");
     await addLog(id, status !== "routed"
       ? `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`
       : `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
