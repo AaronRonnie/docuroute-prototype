@@ -404,7 +404,21 @@ function randomType(){
 // your own machine (`python serve.py`) and testing this page via file://.
 // Once that service is hosted somewhere real (the planned Render backend),
 // this becomes an https:// URL instead and no other code here needs to change.
-const CLASSIFY_API_URL = "http://127.0.0.1:5001/classify";
+//
+// To point a phone at the desktop's classifier through a Cloudflare tunnel, open
+// the page once as  .../index.html?classifier=https://xxxx.trycloudflare.com
+// The address is remembered on that device; ?classifier=reset clears it.
+const DEFAULT_CLASSIFIER_BASE = "http://127.0.0.1:5001";
+const CLASSIFY_API_URL = (function(){
+  try{
+    const q = new URLSearchParams(location.search).get("classifier");
+    if(q === "reset") localStorage.removeItem("docuroute.classifierBase");
+    else if(q) localStorage.setItem("docuroute.classifierBase", q.replace(/\/+$/, "").replace(/\/classify$/, ""));
+    return (localStorage.getItem("docuroute.classifierBase") || DEFAULT_CLASSIFIER_BASE) + "/classify";
+  }catch(e){
+    return DEFAULT_CLASSIFIER_BASE + "/classify";
+  }
+})();
 
 // Returns {type, confidence} from the real classifier, or null if it's
 // unreachable (server not running, CORS/mixed-content blocked, etc.) -- callers
