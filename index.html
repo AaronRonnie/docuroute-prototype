@@ -734,6 +734,13 @@ const TYPE_LABEL = {
 // finishPipeline() / the requests.type migration) -- fall back to a label
 // instead of rendering the literal string "undefined" during that window.
 function typeLabel(t){ return TYPE_LABEL[t] || "Classifying…"; }
+// Title for a request: its type once known; "Unidentified form" once the AI has
+// finished without a type (waiting for the Registrar); "Classifying…" only while
+// the AI is actually still running.
+function reqTitle(r){
+  if(r.type) return TYPE_LABEL[r.type] || r.type;
+  return ["unverified","declined","completed"].includes(r.status) ? "Unidentified form" : "Classifying…";
+}
 
 let session = null; // {id, username, role, name, studentNo, program}
 let state = { requests: [], accounts: [] };
@@ -806,12 +813,28 @@ function scheduleRealtimeRefresh(){
   clearTimeout(realtimeRefreshTimer);
   realtimeRefreshTimer = setTimeout(syncNow, 250);
 }
+// True while redrawing the page would throw away something the user is in the
+// middle of: a form being filled in, or the QR camera mid-scan. Background
+// refreshes (live updates / polling) skip the redraw then; the data is still
+// updated, and the next action or tab change shows it.
+function userIsBusy(){
+  const a = document.activeElement;
+  if(a && a.closest("#root") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  if(session && session.role === "student" && state.newReq) return true;
+  if(session && session.role === "staff" && isMobile()){
+    if(mobileScreen === "capture") return true;
+    if(mobileScreen === "scan" && scanResult === null) return true;
+  }
+  return false;
+}
+
 async function syncNow(){
   if(!session) return;
   try{
     await refresh();
     if(session.role === "admin") await refreshAccounts();
   }catch(e){ return; }
+  if(userIsBusy()) return;
   renderRoot();
 }
 
@@ -1163,7 +1186,7 @@ function mobileStudentActiveHtml(){
     if(r) return `
       <button class="back-link" data-back>← Your requests</button>
       <div class="m-detail-head">
-        <h2>${typeLabel(r.type)}</h2>
+        <h2>${reqTitle(r)}</h2>
         <div class="req-card-id">${r.id}</div>
         ${locationPill(r)}
       </div>
@@ -1185,7 +1208,7 @@ function mobileStudentNotificationsHtml(){
   const cards = mine.map(r => `
     <div class="mapp-card">
       <div class="mapp-card-head">
-        <div><div style="font-weight:600;font-size:14px;">${typeLabel(r.type)}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
+        <div><div style="font-weight:600;font-size:14px;">${reqTitle(r)}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
         ${confPill(r)}
       </div>
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">${statusCaption(r)}</div>
@@ -1300,12 +1323,50 @@ function mobileCaptureHtml(){
   `;
 }
 
+// The scanned code lives in app state, not in the DOM: the page re-renders
+// every few seconds (live updates / polling), and a result that only existed
+// in the DOM used to vanish and restart the camera. While a result is showing
+// there's no <video> at all, so the camera stays off and iOS has no frozen
+// video to put its own pause button on.
+let scanResult = null; // the tracking ID / text last scanned or typed
+
+function scanResultHtml(){
+  const text = scanResult;
+  const req = state.requests.find(r => r.id === text.trim());
+  const again = `<button class="btn block" data-scan-again>Scan another</button>`;
+  if(!req) return `
+    <div class="mapp-scan-result">
+      <div style="font-weight:600;margin-bottom:6px;">Not found</div>
+      <div style="font-size:13px;color:var(--ink-soft);">No request matches <span class="mono">${esc(text)}</span>. It may belong to another office, or the code may not be a DocuRoute label.</div>
+    </div>${again}`;
+  const canAct = req.status !== "completed" && req.status !== "declined";
+  return `
+    <div class="mapp-scan-result">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="font-weight:600;">${reqTitle(req)}</div>${pill(req.status)}
+      </div>
+      <div class="kv-row"><span class="k">ID</span><span class="v mono">${req.id}</span></div>
+      <div class="kv-row"><span class="k">Student</span><span class="v">${esc(req.student)}</span></div>
+      <div class="kv-row"><span class="k">Current office</span><span class="v">${currentOfficeLabel(req)}</span></div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+        ${req.status === "unverified" ? `<button class="btn small" data-mconfirm="${req.id}">Confirm &amp; Route</button>` :
+          canAct ? `<button class="btn small" data-madvance="${req.id}">${req.status === "routed" ? "Mark In Progress" : "Advance"}</button>` : ""}
+        <button class="btn secondary small" data-mview="${req.id}">View Full Details</button>
+      </div>
+    </div>${again}`;
+}
+
 function mobileScanHtml(){
+  if(scanResult !== null) return `
+    <button class="mapp-back" data-mscreen="menu">&larr; Back</button>
+    <h2>Scan QR Label</h2>
+    ${scanResultHtml()}
+  `;
   return `
     <button class="mapp-back" data-mscreen="menu">&larr; Back</button>
     <h2>Scan QR Label</h2>
     <div class="mapp-viewfinder" id="mappViewfinder">
-      <video id="qrVideo" autoplay playsinline muted></video>
+      <video id="qrVideo" autoplay playsinline muted disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback"></video>
       <div class="hint">Point the camera at a document's QR label</div>
     </div>
     <canvas id="qrCanvas" style="display:none;"></canvas>
@@ -1313,7 +1374,6 @@ function mobileScanHtml(){
       <input id="manualQrInput" placeholder="Or type the tracking ID (e.g. DR-2026-0007)">
       <button class="btn secondary small" id="manualQrBtn">Look up</button>
     </div>
-    <div id="mappScanResult"></div>
   `;
 }
 
@@ -1331,6 +1391,7 @@ function wireMobileView(){
   document.querySelectorAll("[data-mscreen]").forEach(el=>{
     el.addEventListener("click", ()=>{
       stopQrScanner();
+      scanResult = null; // leaving/re-entering the Scan tab starts a fresh scan
       mobileScreen = el.dataset.mscreen;
       renderRoot();
     });
@@ -1351,6 +1412,14 @@ function wireMobileCapture(){
 }
 
 function wireMobileScan(){
+  // Showing a result: wire its buttons and leave the camera OFF.
+  if(scanResult !== null){
+    document.querySelectorAll("[data-scan-again]").forEach(b => b.addEventListener("click", ()=>{ scanResult = null; renderRoot(); }));
+    document.querySelectorAll("[data-mconfirm]").forEach(b => b.addEventListener("click", () => confirmAndRoute(b.dataset.mconfirm)));
+    document.querySelectorAll("[data-madvance]").forEach(b => b.addEventListener("click", () => advanceRequest(b.dataset.madvance)));
+    document.querySelectorAll("[data-mview]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.mview)));
+    return;
+  }
   document.getElementById("manualQrBtn").addEventListener("click", ()=>{
     const v = document.getElementById("manualQrInput").value.trim();
     if(v) handleQrDecoded(v);
@@ -1393,36 +1462,16 @@ async function startQrScanner(){
   }
 }
 function stopQrScanner(){
+  const video = document.getElementById("qrVideo");
+  if(video){ try{ video.pause(); }catch(e){} video.srcObject = null; }
   if(qrStreamHandle){ qrStreamHandle.getTracks().forEach(t=>t.stop()); qrStreamHandle = null; }
 }
 
+// Re-renders the screen with the result card (and no camera) — see scanResult above.
 function handleQrDecoded(text){
-  const req = state.requests.find(r => r.id === text.trim());
-  const resultEl = document.getElementById("mappScanResult");
-  if(!resultEl) return;
-  if(!req){
-    resultEl.innerHTML = `<div class="mapp-scan-result">Unrecognized code: <span class="mono">${text}</span></div>`;
-    return;
-  }
-  const canAct = req.status !== "completed" && req.status !== "declined";
-  resultEl.innerHTML = `
-    <div class="mapp-scan-result">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:600;">${typeLabel(req.type)}</div>${pill(req.status)}
-      </div>
-      <div class="kv-row"><span class="k">ID</span><span class="v mono">${req.id}</span></div>
-      <div class="kv-row"><span class="k">Student</span><span class="v">${req.student}</span></div>
-      <div class="kv-row"><span class="k">Current office</span><span class="v">${currentOfficeLabel(req)}</span></div>
-      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-        ${req.status === "unverified" ? `<button class="btn small" data-mconfirm="${req.id}">Confirm &amp; Route</button>` :
-          canAct ? `<button class="btn small" data-madvance="${req.id}">${req.status === "routed" ? "Mark In Progress" : "Advance"}</button>` : ""}
-        <button class="btn secondary small" data-mview="${req.id}">View Full Details</button>
-      </div>
-    </div>
-  `;
-  resultEl.querySelectorAll("[data-mconfirm]").forEach(b => b.addEventListener("click", () => confirmAndRoute(b.dataset.mconfirm)));
-  resultEl.querySelectorAll("[data-madvance]").forEach(b => b.addEventListener("click", () => advanceRequest(b.dataset.madvance)));
-  resultEl.querySelectorAll("[data-mview]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.mview)));
+  stopQrScanner();
+  scanResult = String(text).trim();
+  renderRoot();
 }
 
 /* ---------------- Status helpers ---------------- */
@@ -1621,7 +1670,7 @@ function studentCardHtml(r){
     <article class="req-card">
       <div class="req-card-top">
         <div>
-          <h3 class="req-card-title">${typeLabel(r.type)}</h3>
+          <h3 class="req-card-title">${reqTitle(r)}</h3>
           <div class="req-card-id">${r.id}</div>
         </div>
         ${pill(r.status)}
@@ -1732,7 +1781,7 @@ function studentDetailView(){
     <header class="content-header page-head">
       <div>
         <button class="back-link" data-back>← Your requests</button>
-        <h1>${typeLabel(r.type)}</h1>
+        <h1>${reqTitle(r)}</h1>
         <p>${r.id} &nbsp;•&nbsp; Submitted ${fmtTs(r.log[0].ts)}</p>
       </div>
       <div class="head-pill">${locationPill(r)}</div>
@@ -1782,7 +1831,7 @@ function studentNotificationsView(){
       ${mine.map(r=>`
         <div class="qrow" style="grid-template-columns:104px 1.3fr 68px 1fr 1.7fr 60px;">
           <div class="id mono">${r.id}</div>
-          <div class="who">${typeLabel(r.type)}</div>
+          <div class="who">${reqTitle(r)}</div>
           <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
           <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
           <div class="status-cell">${confPill(r)}<div class="cap">${statusCaption(r)}</div></div>
@@ -1816,7 +1865,7 @@ function queueRowsHtml(list, kind, actionLabel){
     ${list.map(r=>`
       <div class="qrow">
         <div class="id mono">${r.id}</div>
-        <div class="who">${typeLabel(r.type)}</div>
+        <div class="who">${reqTitle(r)}</div>
         <div class="who">${r.student}<div class="sub">${r.studentNo}</div></div>
         <div class="age">${fmtAge(r.log[r.log.length-1].ts)}</div>
         <div class="loc ${r.status==='unverified'||r.status==='declined'?'warn':''}">${currentOfficeLabel(r)}</div>
@@ -2551,7 +2600,7 @@ async function finishPipeline(id, ctx){
   // A recovery sweep (recoverStuckSubmission) can call this for a request
   // nobody's actively looking at -- don't yank the current user into a
   // detail modal for someone else's resolved submission.
-  if(ctx.silent){ renderRoot(); return; }
+  if(ctx.silent){ if(!userIsBusy()) renderRoot(); return; }
   closeModal();
   // Student: show the AI result / AI unsure page. Staff capture keeps the detail modal.
   if(session && session.role === "student" && outcome){
@@ -2684,7 +2733,7 @@ function openDetail(id){
   const modal = document.getElementById("modal");
   modal.innerHTML = `
     <div class="modal-head">
-      <h2>${typeLabel(req.type)} <span class="mono" style="font-size:13px;color:var(--ink-faint)">${req.id}</span></h2>
+      <h2>${reqTitle(req)} <span class="mono" style="font-size:13px;color:var(--ink-faint)">${req.id}</span></h2>
       <button class="modal-close" data-close>&times;</button>
     </div>
     <div class="modal-body">
