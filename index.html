@@ -966,8 +966,8 @@ function renderLogin(){
 async function logout(){
   unsubscribeRealtime();
   stopPolling();
+  session = null; // cleared first so the cross-tab login watcher treats this as our own logout
   await sb.auth.signOut();
-  session = null;
   renderRoot();
 }
 
@@ -1994,17 +1994,17 @@ async function applySeedPlan(id, type, confidence, plan){
   const route = ROUTES[type];
   if(confidence < 70){
     await addLog(id, `Confidence ${confidence}% is below the 70% threshold - flagged 'Unverified' and sent to the intake clerk queue.`);
-    await sb.from("requests").update({ confidence, status:"unverified" }).eq("id", id);
+    await must(`update ${id}`, sb.from("requests").update({ confidence, status:"unverified" }).eq("id", id));
     if(plan === "unverified") return;
   } else {
     await addLog(id, `Confidence ${confidence}% - deterministic routing table assigned this request. QR sticker printed, digital twin archived.`);
-    await sb.from("requests").update({ confidence, status:"routed" }).eq("id", id);
+    await must(`update ${id}`, sb.from("requests").update({ confidence, status:"routed" }).eq("id", id));
     if(plan === "routed") return;
   }
   let hop = 0;
   if(plan === "progress" || plan === "completed"){
     await addLog(id, `${route[hop]} marked the request In Progress.`);
-    await sb.from("requests").update({ status:"progress" }).eq("id", id);
+    await must(`update ${id}`, sb.from("requests").update({ status:"progress" }).eq("id", id));
     if(plan === "progress") return;
   }
   if(plan === "completed"){
@@ -2013,14 +2013,30 @@ async function applySeedPlan(id, type, confidence, plan){
       hop++;
     }
     await addLog(id, `${route[hop]} gave final approval. Request closed.`);
-    await sb.from("requests").update({ status:"completed", hop }).eq("id", id);
+    await must(`update ${id}`, sb.from("requests").update({ status:"completed", hop }).eq("id", id));
   }
 }
 
+// Runs one reset step; a failed write stops the whole reset with a message that
+// says which step failed (these used to be ignored, so a failure surfaced
+// later as a confusing row-level-security error on the audit log).
+async function must(step, query){
+  const { data, error } = await query;
+  if(error) throw new Error(`${step}: ${error.message}`);
+  return data;
+}
+
 async function resetDemoRequests(){
-  await sb.rpc("reset_request_seq");
-  await sb.from("requests").delete().neq("id", "");
-  const { data: profiles } = await sb.from("profiles").select("id,name,student_no,program");
+  // The login is shared by every tab of this browser. If someone signed in as a
+  // different account in another tab, our writes would silently run as THAT
+  // account — so confirm we're still the admin before touching anything.
+  const { data: u } = await sb.auth.getUser();
+  if(!u || !u.user || u.user.id !== session.id){
+    throw new Error("You're signed in as a different account in another tab. Log out here and log in as the admin again.");
+  }
+  await must("restart ID counter", sb.rpc("reset_request_seq"));
+  await must("clear old requests", sb.from("requests").delete().neq("id", ""));
+  const profiles = await must("load accounts", sb.from("profiles").select("id,name,student_no,program"));
   const byName = n => (profiles || []).find(p => p.name === n);
   const seeds = [
     { type:"waiver",     name:"Aaron Peter San Pedro", fields:{ quarterAY:"1Q, AY 2026-2027", prereq:"IT101", advanced:"IT201" }, confidence:92, plan:"routed" },
@@ -2030,12 +2046,12 @@ async function resetDemoRequests(){
   ];
   for(const s of seeds){
     const p = byName(s.name);
-    const { data: id } = await sb.rpc("next_request_id");
-    await sb.from("requests").insert({
+    const id = await must("new request ID", sb.rpc("next_request_id"));
+    await must(`create demo request ${id}`, sb.from("requests").insert({
       id, type: s.type, student_id: p ? p.id : null, student_name: s.name,
       student_no: p ? p.student_no : "—", program: p ? p.program : "—",
       contact_no: "09171234567", fields: s.fields, confidence: null, route: ROUTES[s.type], hop: 0, status: "submitted"
-    });
+    }));
     await addLog(id, `Submitted by ${s.name} at the Registrar window.`);
     await applySeedPlan(id, s.type, s.confidence, s.plan);
   }
@@ -2746,6 +2762,16 @@ async function init(){
   applyViewportTheme();
   MOBILE_QUERY.addEventListener("change", ()=>{ stopQrScanner(); applyViewportTheme(); renderRoot(); });
   if(!SUPABASE_CONFIGURED){ renderRoot(); return; }
+  // All tabs of one browser share a single login. If another tab signs in as a
+  // different account (or signs out), this tab must not keep acting as the old
+  // one — its writes would silently run as the new account. Reload to match.
+  sb.auth.onAuthStateChange((event, s)=>{
+    if(!session) return; // this tab isn't logged in (or is mid-login): nothing to protect
+    const changed = event === "SIGNED_OUT" || (s && s.user && s.user.id !== session.id);
+    if(!changed) return;
+    showToast("Your login changed in another tab — reloading as that account.", "warn", { timeout:0 });
+    setTimeout(()=> location.reload(), 1200);
+  });
   await loadSession();
   if(session){
     state.page = pagesForSession(session)[0].id;
