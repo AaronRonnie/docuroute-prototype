@@ -373,6 +373,8 @@
   .dialog .modal-body{ gap:14px; }
   .dialog p{ margin:0; color:var(--ink-soft); font-size:14px; }
   .field .hint-error{ color:var(--bad); font-size:12.5px; margin-top:6px; }
+  .field .hint-soft{ color:var(--ink-soft); font-size:12.5px; margin-top:6px; }
+  .dialog .field select{ width:100%; padding:12px 14px; border-radius:var(--radius-btn); border:1px solid var(--line); background:var(--surface); color:var(--ink); font:inherit; font-size:15px; }
 
   /* ---- Section header row (title + badges) ---- */
   .section-title{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; margin:26px 0 12px; display:flex; align-items:center; gap:10px; }
@@ -1503,7 +1505,7 @@ function showToast(message, tone, opts){
 
 // Promise-based confirm. With `reason`, shows a textarea that must be filled.
 // Resolves { ok:boolean, reason:string }.
-function confirmDialog({ title, body, confirmLabel, danger, reason }){
+function confirmDialog({ title, body, confirmLabel, danger, reason, select }){
   return new Promise(resolve=>{
     const layer = document.getElementById("dialogOverlay");
     const box = document.getElementById("dialog");
@@ -1511,6 +1513,9 @@ function confirmDialog({ title, body, confirmLabel, danger, reason }){
       <div class="modal-head"><h2 id="dialogTitle">${title}</h2></div>
       <div class="modal-body">
         ${body ? `<p>${body}</p>` : ""}
+        ${select ? `<div class="field"><label for="dlgSelect">${select.label}</label>
+          <select id="dlgSelect">${select.options.map(o => `<option value="${o.value}" ${o.value === select.value ? "selected" : ""}>${o.label}</option>`).join("")}</select>
+          ${select.note ? `<div class="hint-soft">${select.note}</div>` : ""}</div>` : ""}
         ${reason ? `<div class="field"><label for="dlgReason">${reason.label}</label>
           <textarea id="dlgReason" placeholder="${reason.placeholder || ""}"></textarea>
           <div class="hint-error" id="dlgReasonErr" hidden>Please give a reason — the student will see it.</div></div>` : ""}
@@ -1523,16 +1528,17 @@ function confirmDialog({ title, body, confirmLabel, danger, reason }){
     const finish = (ok)=>{
       const text = reason ? document.getElementById("dlgReason").value.trim() : "";
       if(ok && reason && !text){ document.getElementById("dlgReasonErr").hidden = false; document.getElementById("dlgReason").focus(); return; }
+      const picked = select ? document.getElementById("dlgSelect").value : null;
       layer.classList.remove("open"); box.innerHTML = "";
       document.removeEventListener("keydown", onKey);
-      resolve({ ok, reason:text });
+      resolve({ ok, reason:text, value:picked });
     };
     const onKey = (e)=>{ if(e.key === "Escape") finish(false); };
     document.addEventListener("keydown", onKey);
     document.getElementById("dlgCancel").addEventListener("click", ()=>finish(false));
     document.getElementById("dlgOk").addEventListener("click", ()=>finish(true));
     layer.onclick = (e)=>{ if(e.target === layer) finish(false); };
-    (reason ? document.getElementById("dlgReason") : document.getElementById("dlgOk")).focus();
+    (reason ? document.getElementById("dlgReason") : select ? document.getElementById("dlgSelect") : document.getElementById("dlgOk")).focus();
   });
 }
 
@@ -2560,14 +2566,44 @@ async function finishPipeline(id, ctx){
 
 // These used to swallow errors silently (catch(e){}); a failed write now shows
 // a toast, and a successful one confirms what happened.
+// The AI's best guess for an unclassified request only survives in the audit
+// log ("... classified as <Label> by ..."), so read it back for pre-selecting.
+function guessedTypeFromLog(req){
+  for(const l of [...req.log].reverse()){
+    const m = l.text.match(/classified as (.+?) by the local classify service/);
+    if(m){ const key = Object.keys(TYPE_LABEL).find(k => TYPE_LABEL[k] === m[1]); if(key) return key; }
+  }
+  return null;
+}
+
 async function confirmAndRoute(id){
   try{
     const req = state.requests.find(r=>r.id===id);
-    await addLog(id, `Intake clerk manually confirmed the document type - routed to ${req.route[0]}.`);
-    const { error } = await sb.from("requests").update({ status:"routed" }).eq("id", id);
+    let update = { status:"routed" }, routeTo = req.route[0], logText;
+    // An unclassified request (AI unsure) has no type and no route yet, so
+    // confirming means choosing the type — that sets the route from the table.
+    if(!req.type || !req.route.length){
+      const guess = guessedTypeFromLog(req);
+      const { ok, value } = await confirmDialog({
+        title:`Confirm document type for ${id}`,
+        body: guess ? `The AI suggested <b>${TYPE_LABEL[guess]}</b> at ${req.confidence}% — below the 70% gate, so please check the form.` : "The AI couldn't identify this form. Choose what it is.",
+        select:{ label:"Document type", value: guess || "waiver",
+                 options:Object.keys(ROUTES).map(k => ({ value:k, label:TYPE_LABEL[k] })),
+                 note:"The route is set automatically from the type." },
+        confirmLabel:"Confirm & route"
+      });
+      if(!ok) return;
+      update = { status:"routed", type:value, route:ROUTES[value], hop:0 };
+      routeTo = ROUTES[value][0];
+      logText = `Intake clerk confirmed the document type as ${TYPE_LABEL[value]} - routed to ${routeTo}.`;
+    } else {
+      logText = `Intake clerk manually confirmed the document type - routed to ${routeTo}.`;
+    }
+    await addLog(id, logText);
+    const { error } = await sb.from("requests").update(update).eq("id", id);
     if(error) throw error;
     await refresh();
-    showToast(`${id} confirmed — routed to ${req.route[0]}.`, "good");
+    showToast(`${id} confirmed — routed to ${routeTo}.`, "good");
   }catch(e){ showToast("Couldn't route " + id + ": " + (e.message || "can't reach the server."), "bad"); }
   renderRoot();
 }

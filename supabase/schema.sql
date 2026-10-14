@@ -67,8 +67,9 @@ grant execute on function public.current_user_office() to authenticated, anon;
 -- admin sees everything; a staff account sees a request only if its own office
 -- appears somewhere in that request's route (e.g. Treasury never sees a
 -- Prerequisite Waiver, since "Treasury" never appears in ROUTES.waiver).
--- Registrar is in every route, so this also covers the unverified/intake queue
--- with no separate carve-out needed.
+-- Registrar is in every route. A request the AI couldn't classify has an empty
+-- route until the Registrar confirms its type, so the Registrar is also allowed
+-- to see empty-route requests (migration-007).
 create or replace function public.staff_can_see_request(req_route text[])
 returns boolean
 language sql
@@ -77,7 +78,10 @@ security definer
 set search_path = public
 as $$
   select public.current_user_role() = 'admin'
-      or (public.current_user_role() = 'staff' and public.current_user_office() = any(req_route));
+      or (public.current_user_role() = 'staff' and (
+            public.current_user_office() = any(req_route)
+            or (public.current_user_office() = 'Registrar' and coalesce(cardinality(req_route), 0) = 0)
+         ));
 $$;
 
 grant execute on function public.staff_can_see_request(text[]) to authenticated, anon;
