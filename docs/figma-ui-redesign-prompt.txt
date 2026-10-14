@@ -1,0 +1,379 @@
+=====================================================================
+PROMPT FOR CHATGPT + FIGMA PLUGIN
+Project: DocuRoute - UI/UX redesign (desktop + mobile)
+=====================================================================
+
+You are a senior product designer working in Figma. I am attaching screenshots
+of my current working prototype. I am NOT giving you the code, so everything
+you need to know about how the system works is written below. Read ALL of it
+before designing anything. When the screenshots and this text disagree, tell me
+and ask - do not guess.
+
+YOUR JOB
+Redesign the UI of this app so that it is (1) easier and faster to use for every
+role, (2) visually cleaner and more polished, and (3) properly designed for BOTH
+desktop and mobile. This is a university thesis project that will be demoed live
+to a panel and piloted with real students and office staff, so clarity and
+"obviously works" matter more than decoration.
+
+Deliver, in Figma:
+  - A small design system first: color tokens, type scale, spacing scale,
+    radii, shadows, and components (buttons, inputs, pills/status badges,
+    cards, stepper, table rows, modal/bottom-sheet, tabs, empty states,
+    toasts). Light AND dark variants.
+  - Desktop frames at 1440 x 900 and mobile frames at 390 x 844 for every
+    screen listed in section 5.
+  - Key states, not just the happy path: empty, loading, error, offline,
+    "AI unsure" (below threshold), declined, completed.
+  - A short written rationale per screen: what changed and why it's easier.
+  - A prioritized list: "do these 5 first" vs "nice to have".
+Keep it implementable: the real app is a single static HTML/CSS/vanilla-JS page,
+no React, so avoid designs that need heavy custom interactions. Use real copy,
+not lorem ipsum.
+
+---------------------------------------------------------------------
+1. WHAT DOCUROUTE IS
+---------------------------------------------------------------------
+DocuRoute is a document-tracking and routing system for Mapua University (Philippines),
+built as an undergraduate thesis. Today, a student fills out a PAPER form
+(e.g. a prerequisite waiver) and physically carries it between offices to get
+signatures: Section Chief / Dean / Treasury / Registrar. Nobody knows where the
+paper is, students keep walking back to ask, and forms get lost or misrouted.
+
+DocuRoute fixes this:
+  - The form gets photographed/scanned and uploaded (a "digital twin").
+  - An AI step reads the photo (OCR) and works out WHICH kind of form it is.
+  - If the AI is confident enough (>= 70%), the system automatically routes it
+    to the right sequence of offices. If not, a human Registrar clerk confirms
+    the type first ("human-in-the-loop").
+  - Each document gets a QR code / tracking ID (format DR-2026-0007). Staff scan
+    it with a phone to look up the document and advance it.
+  - Every action is written to an audit trail. The student can track their
+    request like a courier parcel.
+
+Think: "parcel tracking + office approval inbox + phone scanner".
+
+---------------------------------------------------------------------
+2. WHO USES IT (6 roles, each sees ONLY their own pages)
+---------------------------------------------------------------------
+There is no role switcher. You log in and you only get your role's pages.
+
+STUDENT (the main user; mostly on a phone, between classes)
+  Pages: Active Requests, Notifications.
+  Wants: "Submit my form, tell me where it is, tell me what happens next."
+  Little patience, no training, often on bad mobile data.
+
+REGISTRAR CLERK (office staff; desk computer AND phone)
+  Page: Registrar Queue.
+  Special duties: confirm anything the AI was unsure about; capture a walk-in's
+  paper form by photographing it; and EVERY request ends at the Registrar.
+
+TREASURY PERSONNEL (office staff)
+  Page: Treasury Queue. Only handles Student Clearance requests (first stop).
+
+SECTION CHIEF (a professor; busy, uses it rarely)
+  Page: Section Chief Review. "Consents" to Section Adjustment and Course
+  Completion requests.
+
+DEAN (a professor/administrator; busy, uses it rarely)
+  Page: Dean's Decision. Inspects the paper, applies a digital signature,
+  approves/declines. Handles Prerequisite Waiver, Transferee Crediting,
+  Shift Program/Modality, and the middle step of Clearance.
+
+ADMIN (the developer / system owner)
+  Pages: System Overview (live stats, role reference table, reset-demo button),
+  Account Management (edit role/office/name/student no./program).
+
+Staff accounts are each locked to exactly ONE office. A Treasury user literally
+cannot see Section Adjustment requests (enforced in the database).
+
+---------------------------------------------------------------------
+3. THE PIPELINE - HOW A REQUEST MOVES (design must make this visible)
+---------------------------------------------------------------------
+A) STUDENT SUBMITS ONLINE
+   1. Student taps "+ New Request".
+   2. Name / Student No. / Program are pre-filled and read-only (from profile).
+      Contact No. is editable. There is a free-text "Request Details" box and a
+      file picker for a photo/scan of the form.
+   3. The student does NOT choose a document type. This is deliberate: the AI
+      is supposed to figure it out. (Don't add a type dropdown for students.)
+      At least one of {file, description} is required.
+   4. Student taps "Submit & Run AI Classification".
+   5. A progress modal shows 4 stages: Rectifying image (deskew, crop,
+      contrast) -> Running OCR -> Layout-aware classification -> Applying
+      confidence gate.
+
+B) AI PROCESSING LAYER (a Python service; this is the real "brain")
+   - Image rectification (OpenCV): finds the page, flattens perspective,
+     corrects rotation, normalizes lighting.
+   - OCR (Tesseract) reads the text.
+   - Classifier: compares the text to 6 known form types and returns a type +
+     a confidence 0-100%. It can also answer "other" = not one of our forms.
+   - Real measured behavior on ~200 phone photos: the predicted type is almost
+     always RIGHT, but the confidence number is often only 40-65%, and only
+     ~11% of photos reach 70%. So in practice MOST real submissions will land
+     in the "needs human confirmation" bucket right now. Design the
+     "Unverified / AI unsure" experience as a FIRST-CLASS, frequent flow, not a
+     rare error. Show the AI's suggested type so the clerk can confirm in one
+     tap.
+   - If the AI service is unreachable, the app silently falls back to a
+     simulated result (dev fallback only).
+
+C) THE 70% CONFIDENCE GATE (the only branch in the system)
+   - confidence >= 70%  -> status "Routed": goes straight to the first office.
+   - confidence <  70%  -> status "Unverified": appears in the Registrar's
+     "Needs manual classification" list; clerk taps "Confirm & Route".
+   - classifier says "other" -> not routable; needs human handling.
+
+D) DETERMINISTIC ROUTES (fixed lookup table; the stepper in the UI is built
+   from this)
+     Prerequisite Waiver ........ Dean's Office -> Registrar
+     Section Adjustment ......... Section Chief -> Registrar
+     Student Clearance .......... Treasury -> Dean's Office -> Registrar
+     Course Completion .......... Section Chief -> Registrar
+     Transferee Crediting ....... Dean's Office -> Registrar
+     Shift Program / Modality ... Dean's Office -> Registrar
+
+E) EACH OFFICE ACTS on a request currently at its step:
+   Approve/Clear (advances to next office; the last office closes the request),
+   or Decline. Section Chief's button reads "Consent & Forward". Dean's reads
+   "Apply Signature & Approve". After "Routed" the first action is "Mark In
+   Progress", then approve. Today the Dean's "digital signature" is just a
+   button label - there's no signature-capture UI.
+
+F) STATUSES (a request is always in exactly one):
+   Submitted -> AI Review -> (Unverified | Routed) -> In Progress -> Completed,
+   or Declined at any office. Colors today: neutral grey, red (bad/unverified/
+   declined), orange (current/routed/in-progress), green (good/completed).
+   Where it "currently is" is shown as: "AI Processing Layer", "Intake Clerk
+   queue", the office name, or "Closed".
+
+G) WALK-IN CAPTURE (staff on a phone)
+   A student with no phone/account hands staff a paper form. Staff opens the
+   mobile app -> "Photograph Physical Form": picks the document type from a
+   dropdown (6 types), types the student's name / number / program / contact,
+   fills a few type-specific fields, takes the photo, submits. Because staff
+   named the type, the AI classification is skipped.
+
+H) QR LOOKUP (staff on a phone)
+   Staff -> "Scan QR Label": live camera scan (needs HTTPS), or type the
+   tracking ID manually. Result card shows type, status, student, current
+   office and buttons: Confirm & Route / Advance (or Mark In Progress) /
+   View Full Details.
+
+I) DETAIL VIEW (opened from anywhere via an "i" icon / View button)
+   Status pill + "Currently at"; student info card (name, student no, program,
+   current office); confidence bar (red <70, green >=70); "Paper Route" vertical
+   list with Done / Current / Next / Declined tags; a small QR code with the
+   tracking ID; a "View attached form" button (opens the private uploaded
+   photo); and the Audit Trail timeline (every action with timestamp).
+
+---------------------------------------------------------------------
+4. CURRENT UI - WHAT EXISTS TODAY (see my screenshots)
+---------------------------------------------------------------------
+Visual style now: warm cream background (#F7F5EF), white cards, near-black
+text, deep forest-green brand (#1F3D2E), serif headings (Lora), sans body,
+green / orange / red status system, sidebar navigation on desktop. Brand mark
+is an Omega symbol with the word "DocuRoute". Light theme on desktop, FORCED
+dark theme on mobile.
+
+Desktop (> 680px):
+  - Left sidebar: logo, nav items with icons, a "Connected to Supabase" dot,
+    "log out" link, and a user avatar/name/role at the bottom.
+  - Page header (big serif H1 + descriptive sentence + count badges).
+  - Student Active Requests: one card per request = title, tracking ID, "i"
+    button, a horizontal stepper of offices, status pill, "Currently at X -
+    submitted <date>".
+  - Student Notifications: a 6-column table (ID, Form, Age, Location, Status,
+    info) with New / Unverified / Routed count badges. It is really a status
+    table, not an event feed.
+  - Staff queues: three stacked tables (Needs manual classification [Registrar
+    only] / Assigned to me / Recently closed), 7 columns each (ID, Form,
+    Student, Age, Location, Status, Actions) with View / Confirm & Route /
+    Approve / Decline buttons per row.
+  - Admin: 5 stat tiles, an RBAC reference table, a "Reset demo database"
+    button; account list with Edit.
+  - Modals: New Request, Request Detail, Account editor, and the AI progress
+    spinner.
+
+Mobile (<= 680px) - separate purpose-built layouts:
+  - Dark theme, a top bar (Omega, DocuRoute, "Mobile Version" badge, back-arrow
+    logout), then content.
+  - Student: two text tabs (Active Requests / Notifications), card-per-request
+    with compact stepper and a Details button, "+ New" button.
+  - Admin: tabs, stat grid, account cards.
+  - Staff: ONLY a menu with two big buttons - "Photograph Physical Form" and
+    "Scan QR Label". See problem #1 below.
+  - Login: centered card with the "Mobile Version" badge.
+
+---------------------------------------------------------------------
+5. SCREENS TO DESIGN (desktop + mobile for each)
+---------------------------------------------------------------------
+  1.  Login (see problem: demo credentials list)
+  2.  Student - Active Requests (incl. empty state)
+  3.  Student - New Request (modal on desktop, full-screen sheet on mobile)
+  4.  AI processing / result screen (progress, then a clear RESULT)
+  5.  Student - Notifications (rethink as an activity feed)
+  6.  Request Detail (modal on desktop, bottom sheet / full page on mobile)
+  7.  Registrar Queue (incl. "Needs manual classification" flow)
+  8.  Treasury / Section Chief / Dean queues (one shared template, with the
+      Dean's signature step and Section Chief's "consent" wording)
+  9.  Staff mobile: Home (queue + quick actions), Photograph Form, Scan QR
+  10. Admin - System Overview and Account Management
+  11. System states: offline/Supabase unreachable, AI service unreachable,
+      session expired, no office assigned, toasts/confirmations
+  12. Dark and light variants of all of the above
+
+---------------------------------------------------------------------
+6. KNOWN PROBLEMS I WANT YOU TO SOLVE (my own audit; add yours)
+---------------------------------------------------------------------
+BIG ONES
+  #1  Staff on mobile CANNOT see their queue. The phone app for staff is only a
+      two-button menu (capture / scan). To act on a request they must scan its
+      QR or type its ID. Staff need an at-a-glance "My queue" list on mobile
+      with swipe or one-tap Approve/Decline, with Capture and Scan as
+      prominent actions (e.g. a bottom tab bar or a floating action button).
+  #2  The student gets no clear RESULT after submitting. The progress modal
+      shows four stage names on a fixed timer and then closes. After the AI
+      runs the student should see: "We think this is a Prerequisite Waiver
+      (82% sure) -> going to Dean's Office, then Registrar", or "We couldn't be
+      sure - the Registrar will confirm it (usually within X)". Make the
+      unverified outcome feel normal and reassuring, not like an error
+      ("Conflict" is the current scary label).
+  #3  Unverified/low-confidence handling is the busiest real workflow (see
+      section 3B) but looks like a minor table. Redesign it: show the photo
+      thumbnail next to the AI's best guess and confidence, one-tap Confirm,
+      and a simple "Change type" picker for when the guess is wrong.
+  #4  Student submit flow is heavy: modal with 5 fields, a bare browser file
+      input, no preview. On mobile it should be: Take photo / Choose from
+      gallery -> see preview (retake) -> optional note -> Submit. Pre-fill
+      everything else. Contact No. currently has a fake hard-coded default
+      value; make it a real, remembered field.
+  #5  Staff walk-in capture asks the clerk to pick the document type from a
+      dropdown of 6 BEFORE the photo. Since the AI exists, flip it: take the
+      photo first, let the AI suggest the type, clerk confirms. Reduce typing
+      (student lookup by student number if possible).
+  #6  Desktop queues are three 7-column tables stacked vertically, and the
+      most important thing (what do I need to act on RIGHT NOW) is not
+      emphasized. Add priority/age emphasis, a primary "needs your action"
+      zone, search by ID/name, filter by type/status, and sort by age.
+      Consider master-detail (list left, detail panel right) to avoid opening
+      a modal for every row.
+  #7  Notifications is not notifications. Redesign as an activity feed of
+      status-change events ("Dean's Office approved your Prerequisite Waiver -
+      2h ago", unread dot, tap to open) with the current New / Unverified /
+      Routed counts as filter chips.
+
+MEDIUM
+  #8  Tracking is the student's #1 question. Make the stepper larger, more
+      parcel-tracking-like, with "what happens next" and an estimated step,
+      the current office highlighted, and the tracking ID/QR one tap away.
+  #9  Login shows a plain-text list of 7 demo accounts with passwords on the
+      login card. Keep a demo helper for my thesis defense, but make it a
+      collapsible "Demo mode: quick sign in" with role chips that fill the form
+      - not a wall of credentials. Add show/hide password.
+  #10 Mobile is forced dark and has a "Mobile Version" badge in the top bar,
+      which wastes space and is a dev artifact. Make mobile follow the system
+      theme (light/dark) and drop the badge. Use a bottom tab bar instead of
+      text tabs at the top; thumb-reachable primary actions; 44px+ tap targets.
+  #11 Errors and confirmations use browser alert() popups. Replace with inline
+      validation, toasts, and confirm dialogs (e.g. "Decline this request?"
+      with a required reason, since a declined request currently carries no
+      reason).
+  #12 Status vocabulary is inconsistent ("Conflict", "Unverified", "Suggested",
+      "AI Review", "Routed"). Propose one plain-language set for students and
+      one operational set for staff. Colors must not be the only signal
+      (add icons/labels - accessibility).
+  #13 The Dean's "Apply Signature & Approve" has no signature UI. Design a
+      lightweight signature step (draw with finger/mouse, or "use saved
+      signature") with a preview of the form photo, since the Dean is
+      "inspecting paper".
+  #14 The Detail modal is a long vertical scroll with everything at the same
+      weight. Re-organize: header (type, ID, status) -> next step/action ->
+      route -> form photo preview (inline thumbnail, not just a button) ->
+      student info -> audit trail collapsed. On mobile make it a full-screen
+      page/bottom sheet.
+  #15 Admin: the RBAC reference table doesn't exist on mobile; stats are just
+      numbers. Add a small chart for confidence distribution / auto-routed vs
+      flagged, since the 70% gate is the thesis's core idea.
+  #16 Empty states are bare text ("Nothing here right now."). Give each a
+      helpful illustration/message and a next action.
+
+FUTURE / DESIGN-AHEAD (design them but mark as "planned")
+  #17 Station QR codes: I have printed QR codes, one per office (Registrar,
+      Treasury, Section Chief, Dean). Not wired up yet. Idea: staff scans the
+      STATION QR once to "check in" as that office on their phone, then scans
+      DOCUMENT QRs to receive/advance them. Design the check-in screen and a
+      "scan document -> Receive / Pass on" quick flow.
+  #18 Versioned digital twin: when an office signs the paper, staff re-photographs
+      it and the system keeps each version (who/when/which office). Design a
+      version history in the Detail view and an "Attach new scan" step when
+      clearing a step. Mark clearly as planned.
+  #19 Push/email notifications to students on status change (only an in-app
+      feed exists today).
+
+---------------------------------------------------------------------
+7. CONSTRAINTS / DO NOT
+---------------------------------------------------------------------
+  - Keep the six document types, six roles, and the route table exactly as
+    above. Do not invent new offices or roles.
+  - Students never pick the document type online.
+  - The 70% confidence gate and the "human confirms when unsure" step must stay
+    visible concepts in the UI.
+  - Real student data and form photos are involved: show only what the role is
+    allowed to see; never show other students' data to a student; avoid
+    designs that expose personal details in list views unnecessarily (e.g.
+    show student number partially in places where it is not needed).
+  - Keep it implementable as plain HTML/CSS/JS (no heavy animation, no
+    framework-specific components). Use standard patterns: tabs, cards, bottom
+    sheets, toasts, skeleton loaders.
+  - Slow/unstable mobile data is common: design loading and retry states,
+    and keep first-screen content light.
+  - Accessibility: WCAG AA contrast in BOTH themes, visible focus states,
+    not color-only meaning, minimum 44px touch targets, readable at 16px base
+    on mobile.
+  - Responsive plan: the app currently switches layouts at 680px wide. Propose
+    a better breakpoint strategy (mobile / tablet / desktop) and what changes
+    at each.
+  - Brand: I like the cream + forest-green + serif-heading identity. You may
+    refine it (better contrast, more consistent spacing, tidier type scale),
+    but tell me if you think it should change and why.
+  - Language: English, Philippine school context (Mapua University, "AY
+    2026-2027", term names like "1Q"). Tracking IDs look like DR-2026-0007.
+
+---------------------------------------------------------------------
+8. SAMPLE DATA TO USE IN MOCKUPS
+---------------------------------------------------------------------
+  Students: Aaron San Pedro (apvsanpedro@mymail.mapua.edu.ph) and Mike
+  Vocal (mefvocal@mymail.mapua.edu.ph), BS IT.
+  Requests (examples):
+    DR-2026-0001  Prerequisite Waiver    At Dean's Office     94%  Routed
+    DR-2026-0002  Section Adjustment     At Section Chief     88%  In Progress
+    DR-2026-0003  Student Clearance      Treasury -> Dean -> Registrar  76%
+    DR-2026-0004  (unclassified photo)   Intake Clerk queue    52%  Unverified
+                  AI guess: Shift Program/Modality
+    DR-2026-0005  Course Completion      Completed (all offices cleared)
+    DR-2026-0006  Transferee Crediting   Declined at Dean's Office
+  Waiver example fields: "1Q, AY 2026-2027", prerequisite IT101, advanced
+  course IT201. Section Adjustment: IT31FA1 -> IT31FA2, subject IT201.
+
+---------------------------------------------------------------------
+9. HOW I WANT YOU TO WORK
+---------------------------------------------------------------------
+  1. First, look at my screenshots and summarize in 8-10 bullets what you
+     think is wrong or confusing in the CURRENT screens. Ask me up to 5
+     clarifying questions if anything is ambiguous - I will answer verbally.
+  2. Propose the information architecture / navigation for desktop and mobile
+     for each role (a one-screen diagram or list). Wait for my OK.
+  3. Build the design system, then the screens in this priority order:
+     (a) Student: New Request -> AI result -> Active Requests -> Detail
+     (b) Staff mobile: queue + Capture + Scan
+     (c) Registrar queue incl. unverified flow (desktop)
+     (d) Dean / Section Chief / Treasury
+     (e) Login, Notifications feed, Admin
+     (f) Planned features #17-#19
+  4. For every screen give me: the frame(s), the states, the one-line "why this
+     is easier", and any copy changes.
+  5. End with the "top 5 changes that will improve usability the most" so I can
+     implement them first.
+=====================================================================

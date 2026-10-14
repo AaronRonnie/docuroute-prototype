@@ -5,3 +5,5 @@ server/db.json
 
 .DS_Store
 Thumbs.db
+# Google Drive sync drops these in every folder
+desktop.ini

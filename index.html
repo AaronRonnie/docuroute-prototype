@@ -4,51 +4,62 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DocuRoute Prototype</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="icon" type="image/png" href="assets/logo-mark.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <style>
+  /* Design tokens — from Figma "DocuRoute · UI/UX Redesign — Light Theme"
+     (frames 9:10 / 9:57). Dark values are derived (no dark frames yet). */
   :root{
-    --bg:#F7F5EF; --surface:#FFFFFF; --surface-2:#ECE8DD; --surface-3:#E1DDCF;
-    --ink:#20241F; --ink-soft:#5B6058; --ink-faint:#8B9088;
-    --accent:#181B16; --accent-strong:#000000; --btn-ink:#FFFFFF;
+    --bg:#F7F5EF; --surface:#FFFFFF; --surface-2:#EFEDE5; --surface-3:#E3E1D8;
+    --soft:#EBF3EA;                       /* "Surface / soft" — summary band, routed pill */
+    --ink:#19261E; --ink-soft:#657369; --ink-faint:#8A958C;
+    --accent:#1F3D2E; --accent-strong:#163024; --btn-ink:#FFFFFF;   /* primary button = forest */
     --brand:#1F3D2E; --brand-strong:#122318;
     --good:#1F7A4D; --good-soft:#E1F2E7;
-    --current:#B5541F; --current-soft:#F6E6DA;
+    --current:#A4660A; --current-soft:#FFF3DB; /* "amberBg" pill */
     --bad:#C0392B; --bad-soft:#FBE3E1;
-    --line:#E4E1D5;
-    --shadow:0 1px 2px rgba(32,36,31,.05), 0 10px 26px -14px rgba(32,36,31,.18);
+    --line:#DDE5DC;
+    /* Sidebar (forest) */
+    --side-bg:#1F3D2E; --side-active:#345342; --side-ink:#FFFFFF; --side-muted:#AFC6B1; --side-faint:#C2DAC4;
+    --radius-btn:10px; --radius-card:15px; --radius-band:16px;
+    --shadow:0 1px 2px rgba(25,38,30,.04), 0 10px 26px -16px rgba(25,38,30,.16);
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#14160F; --surface:#1B1E16; --surface-2:#242820; --surface-3:#2C3127;
-      --ink:#EDEBE2; --ink-soft:#B3B2A6; --ink-faint:#82877C;
-      --accent:#ECE8DD; --accent-strong:#FFFFFF; --btn-ink:#14160F;
-      --brand:#3FAF7B; --brand-strong:#6FCE9C;
+      --bg:#121813; --surface:#1A221C; --surface-2:#222B24; --surface-3:#2B352D;
+      --soft:#1F3127;
+      --ink:#E9EEE8; --ink-soft:#A9B5AB; --ink-faint:#7D8A80;
+      --accent:#3F8F65; --accent-strong:#4FA676; --btn-ink:#FFFFFF;
+      --brand:#6FCE9C; --brand-strong:#9BE0BA;
       --good:#5FBF8E; --good-soft:#1B2F22;
-      --current:#E08A4D; --current-soft:#3A2416;
+      --current:#E9B055; --current-soft:#3A2D14;
       --bad:#E5766B; --bad-soft:#3A201D;
-      --line:#31352A;
+      --line:#2E3A31;
+      --side-bg:#0F1A13; --side-active:#22382B; --side-muted:#8FA894; --side-faint:#A6BFAA;
       --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
     }
   }
   :root[data-theme="dark"]{
-    --bg:#14160F; --surface:#1B1E16; --surface-2:#242820; --surface-3:#2C3127;
-    --ink:#EDEBE2; --ink-soft:#B3B2A6; --ink-faint:#82877C;
-    --accent:#ECE8DD; --accent-strong:#FFFFFF; --btn-ink:#14160F;
-    --brand:#3FAF7B; --brand-strong:#6FCE9C;
+    --bg:#121813; --surface:#1A221C; --surface-2:#222B24; --surface-3:#2B352D;
+    --soft:#1F3127;
+    --ink:#E9EEE8; --ink-soft:#A9B5AB; --ink-faint:#7D8A80;
+    --accent:#3F8F65; --accent-strong:#4FA676; --btn-ink:#FFFFFF;
+    --brand:#6FCE9C; --brand-strong:#9BE0BA;
     --good:#5FBF8E; --good-soft:#1B2F22;
-    --current:#E08A4D; --current-soft:#3A2416;
+    --current:#E9B055; --current-soft:#3A2D14;
     --bad:#E5766B; --bad-soft:#3A201D;
-    --line:#31352A;
+    --line:#2E3A31;
+    --side-bg:#0F1A13; --side-active:#22382B; --side-muted:#8FA894; --side-faint:#A6BFAA;
   }
   *{box-sizing:border-box;}
   html,body{margin:0; height:100%;}
   body{
     background:var(--bg); color:var(--ink);
-    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
     line-height:1.5;
   }
   h1,h2,h3{ font-family:"Lora", ui-serif, Georgia, serif; font-weight:600; }
@@ -58,47 +69,56 @@
 
   /* ---- App shell: sidebar + content ---- */
   .app-shell{ display:flex; min-height:100vh; align-items:stretch; }
+  /* Forest sidebar (Figma 9:10: 250px, active item #345342, r10) */
   .sidebar{
-    width:236px; flex:0 0 236px; background:var(--surface); border-right:1px solid var(--line);
+    width:250px; flex:0 0 250px; background:var(--side-bg); color:var(--side-ink);
     display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; z-index:20;
   }
-  .sidebar-brand{ display:flex; align-items:center; gap:10px; padding:22px 20px; border-bottom:1px solid var(--line); }
+  .sidebar-brand{ display:flex; align-items:center; gap:10px; padding:28px 22px 0 28px; }
+  .logo-img, .logo-img img{ display:block; max-width:100%; height:auto; }
+  .sidebar-brand .logo-img{ width:190px; }
+  .sidebar-sub{ padding:10px 22px 0 28px; font-size:10px; font-weight:600; letter-spacing:.04em; color:var(--side-muted); }
   .brand-mark{
-    width:32px; height:32px; border-radius:8px; background:var(--brand); color:#fff;
-    display:flex; align-items:center; justify-content:center; font-family:"Lora",serif; font-weight:700; font-size:17px; flex:0 0 auto;
+    width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-family:"Lora",serif; font-weight:700; font-size:18px; flex:0 0 auto;
   }
-  .brand-word{ font-family:"Lora",serif; font-weight:700; font-size:19px; color:var(--ink); }
-  .nav-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint); font-weight:600; padding:16px 12px 8px; }
-  .sidebar-nav{ padding:0 12px; }
+  .sidebar .brand-mark{ background:#fff; color:var(--side-bg); }
+  .brand-word{ font-family:"Inter",sans-serif; font-weight:600; font-size:19px; letter-spacing:.02em; color:var(--brand); }
+  .sidebar .brand-word{ color:var(--side-ink); }
+  .nav-label{ display:none; }
+  .sidebar-nav{ padding:44px 17px 0; }
   .nav-item{
     display:flex; align-items:center; gap:11px; width:100%; text-align:left;
-    padding:10px 12px; border-radius:9px; font-size:14px; color:var(--ink-soft);
-    background:none; border:none; margin-bottom:2px;
+    min-height:42px; padding:10px 19px; border-radius:var(--radius-btn); font-size:14px; color:var(--side-ink);
+    background:none; border:none; margin-bottom:14px;
   }
-  .nav-item svg{ width:17px; height:17px; flex:0 0 auto; }
-  .nav-item:hover{ background:var(--surface-2); color:var(--ink); }
-  .nav-item.active{ background:var(--surface-2); color:var(--ink); font-weight:600; }
+  .nav-item svg{ width:17px; height:17px; flex:0 0 auto; opacity:.85; }
+  .nav-item:hover{ background:rgba(255,255,255,.06); }
+  .nav-item.active{ background:var(--side-active); font-weight:600; }
+  .nav-item:focus-visible, .btn:focus-visible, .tabbar-item:focus-visible{ outline:2px solid var(--side-faint); outline-offset:2px; }
   .sidebar-spacer{ flex:1; }
-  .conn-row{ display:flex; align-items:center; gap:8px; padding:0 20px 10px; font-size:11px; color:var(--ink-faint); }
-  .conn-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); flex:0 0 auto; }
-  .conn-dot.off{ background:var(--bad); }
-  .reset-link{ background:none; border:none; color:var(--ink-faint); font-size:11.5px; padding:0 20px 14px; text-align:left; text-decoration:underline; text-underline-offset:2px; }
-  .reset-link:hover{ color:var(--ink); }
-  .sidebar-foot{ border-top:1px solid var(--line); padding:14px 18px; display:flex; align-items:center; gap:10px; }
+  .conn-row{ display:flex; align-items:center; gap:8px; padding:0 28px 12px; font-size:12px; color:var(--side-faint); }
+  .conn-dot{ width:7px; height:7px; border-radius:50%; background:var(--side-faint); flex:0 0 auto; }
+  .conn-dot.off{ background:#E5766B; }
+  .reset-link{ background:none; border:none; color:var(--side-muted); font-size:12px; padding:0 28px 14px; text-align:left; text-decoration:underline; text-underline-offset:2px; }
+  .reset-link:hover{ color:var(--side-ink); }
+  .sidebar-foot{ padding:14px 28px 26px; display:flex; align-items:center; gap:10px; }
   .avatar{
-    width:32px; height:32px; border-radius:50%; background:var(--brand); color:#fff;
+    width:32px; height:32px; border-radius:50%; background:var(--side-active); color:#fff;
     display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; flex:0 0 auto;
   }
   .sidebar-foot .who{ flex:1; min-width:0; }
-  .sidebar-foot .name{ font-size:13.5px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .sidebar-foot .portal{ font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em; }
+  .sidebar-foot .name{ font-size:13px; font-weight:600; color:var(--side-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-foot .portal{ font-size:11px; color:var(--side-muted); }
 
+  /* Content header — no white band in the redesign; title sits on the cream page */
   .content{ flex:1; min-width:0; }
-  .content-header{ background:var(--surface); border-bottom:1px solid var(--line); padding:30px 40px 26px; }
-  .content-header h1{ font-size:26px; margin:0 0 6px; }
+  .content-header{ padding:34px 46px 0; max-width:1180px; }
+  .content-header .eyebrow{ font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:24px; }
+  .content-header h1{ font-size:32px; margin:0 0 8px; color:var(--ink); }
   .content-header p{ margin:0; color:var(--ink-soft); font-size:14px; max-width:66ch; }
   .content-header .badges{ display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
-  .content-body{ padding:28px 40px 80px; }
+  .content-body{ padding:28px 46px 80px; max-width:1180px; }
 
   .count-badge{
     display:inline-flex; align-items:center; gap:7px; background:var(--surface-2); color:var(--ink-soft);
@@ -109,13 +129,13 @@
   .btn{
     display:inline-flex; align-items:center; gap:8px;
     background:var(--accent); color:var(--btn-ink); border:none;
-    padding:10px 18px; border-radius:9px; font-size:14.5px; font-weight:600;
+    min-height:44px; padding:10px 18px; border-radius:var(--radius-btn); font-size:14px; font-weight:600;
   }
   .btn:hover{ background:var(--accent-strong); }
   .btn.secondary{ background:var(--surface); color:var(--ink); border:1px solid var(--line); }
   .btn.secondary:hover{ border-color:var(--ink-faint); }
   .btn.danger{ background:var(--bad); color:#fff; }
-  .btn.small{ padding:7px 12px; font-size:12.5px; border-radius:7px; }
+  .btn.small{ min-height:34px; padding:7px 12px; font-size:12.5px; border-radius:8px; }
   .btn:disabled{ opacity:.45; cursor:not-allowed; }
 
   /* ---- Stat tiles (Admin) ---- */
@@ -125,7 +145,7 @@
   .stat-tile .lbl{ font-size:12.5px; color:var(--ink-faint); margin-top:4px; text-transform:uppercase; letter-spacing:.05em; }
 
   /* ---- Cards / table ---- */
-  .card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card); box-shadow:var(--shadow); overflow:hidden; }
   .qlist{ display:flex; flex-direction:column; }
   .qrow{
     display:grid; grid-template-columns:104px 1.15fr 1.1fr 68px 1fr 1.5fr 168px;
@@ -148,11 +168,211 @@
     font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;
     white-space:nowrap; border:1px solid transparent;
   }
-  .pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  /* Status pills — Figma: 30px tall, r15, 12px semibold. Every pill carries an
+     icon + a word so meaning never depends on color alone. */
+  .pill{ min-height:26px; padding:4px 11px 4px 9px; }
+  .pill svg{ width:13px; height:13px; flex:0 0 auto; }
   .pill.neutral{ background:var(--surface-2); color:var(--ink-soft); }
-  .pill.current{ background:var(--current-soft); color:var(--current); }
-  .pill.good{ background:var(--good-soft); color:var(--good); }
+  .pill.soft{ background:var(--soft); color:var(--brand); }            /* Routed */
+  .pill.amber{ background:var(--current-soft); color:var(--current); } /* In progress / needs confirmation */
+  .pill.good{ background:var(--good-soft); color:var(--good); border-color:color-mix(in srgb, var(--good) 35%, transparent); } /* Completed */
   .pill.bad{ background:var(--bad-soft); color:var(--bad); }
+  .conf-chip{ display:inline-flex; align-items:center; font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:500; color:var(--ink-soft); background:var(--surface-2); border-radius:6px; padding:2px 6px; margin-left:6px; vertical-align:middle; }
+  .conf-chip.low{ color:var(--current); background:var(--current-soft); }
+
+  /* ---- Student list + detail (Figma 9:10, 9:57, 9:200, 9:240) ---- */
+  .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .page-head{ display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .page-head .head-btn{ min-width:187px; min-height:46px; }
+  .page-head .head-pill{ align-self:center; }
+  .back-link{ background:none; border:none; padding:6px 0; margin-bottom:14px; font-size:13px; font-weight:600; color:var(--brand); min-height:36px; }
+  .back-link:hover{ text-decoration:underline; text-underline-offset:3px; }
+  .link-btn{ background:none; border:none; padding:6px 0; font-size:12.5px; color:var(--ink-soft); text-align:left; text-decoration:none; min-height:32px; display:inline-flex; align-items:center; gap:8px; }
+  .link-btn:hover{ color:var(--brand); }
+  .btn.block{ width:100%; min-height:46px; }
+
+  .summary-band{ background:var(--soft); border-radius:var(--radius-band); padding:20px 24px; margin-bottom:28px; }
+  .summary-band .big{ font-family:"Lora",serif; font-weight:600; font-size:22px; color:var(--brand); }
+  .summary-band .sub{ font-size:14px; color:var(--ink-soft); margin-top:8px; }
+
+  .req-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:20px 23px; }
+  .req-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card); padding:17px 18px 12px; display:flex; flex-direction:column; gap:12px; }
+  .req-card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .req-card-title{ font-family:"Inter",sans-serif; font-size:17px; font-weight:600; margin:0; color:var(--ink); }
+  .req-card-id{ font-size:12px; color:var(--ink-soft); margin-top:8px; }
+  .req-card-where{ font-size:13px; font-weight:600; color:var(--brand); margin-top:10px; }
+  .list-heading{ font-family:"Lora",serif; font-size:20px; margin:36px 0 14px; }
+
+  .route-bar{ list-style:none; margin:0; padding:0; display:flex; gap:12px; }
+  .route-bar .seg{ flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; }
+  .route-bar .bar{ height:4px; border-radius:2px; background:var(--line); }
+  .route-bar .lbl{ font-size:12px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .route-bar .done .bar, .route-bar .current .bar{ background:var(--brand); }
+  .route-bar .current .lbl, .route-bar .done .lbl{ color:var(--brand); font-weight:600; }
+  .route-bar .done .lbl{ font-weight:500; }
+  .route-bar .bad .bar{ background:var(--bad); } .route-bar .bad .lbl{ color:var(--bad); font-weight:600; }
+  .route-bar.pending .lbl{ font-style:italic; }
+
+  .empty-state{ text-align:center; padding:48px 24px; background:var(--surface); border:1px dashed var(--line); border-radius:var(--radius-card); }
+  .empty-state .empty-ic{ width:52px; height:52px; margin:0 auto 12px; border-radius:14px; background:var(--soft); color:var(--brand); display:flex; align-items:center; justify-content:center; }
+  .empty-state .empty-ic svg{ width:26px; height:26px; }
+  .empty-state h3{ margin:0 0 6px; font-size:19px; }
+  .empty-state p{ margin:0 auto 18px; max-width:40ch; color:var(--ink-soft); font-size:14px; }
+
+  .detail-grid{ display:grid; grid-template-columns:minmax(0,711fr) minmax(280px,365fr); gap:24px; align-items:start; }
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card); padding:24px 25px; }
+  .panel-h{ font-size:23px; margin:0; }
+  .panel-h.small{ font-size:20px; }
+  .next-text{ font-size:15px; color:var(--ink-soft); margin:14px 0 30px; max-width:62ch; }
+  .eyebrow-label{ font-size:12px; font-weight:600; color:var(--brand); letter-spacing:.03em; text-transform:uppercase; margin:56px 0 14px; }
+  .form-row{ display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+  .form-thumb{ width:265px; height:205px; border-radius:11px; background:#F1F3F0; border:1px solid var(--line); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--ink-soft); overflow:hidden; }
+  .form-thumb .ph-ic{ font-size:50px; line-height:1; }
+  .form-thumb .ph-txt{ font-size:14px; }
+  .form-thumb.has-img img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .form-links{ display:flex; flex-direction:column; gap:12px; align-items:flex-start; }
+  .form-links .btn.secondary{ color:var(--brand); min-width:225px; min-height:46px; }
+  .audit{ margin-top:30px; }
+  .audit summary{ cursor:pointer; font-size:13px; font-weight:600; color:var(--brand); text-transform:uppercase; letter-spacing:.03em; min-height:32px; display:flex; align-items:center; gap:8px; list-style:none; }
+  .audit summary::-webkit-details-marker{ display:none; }
+  .audit summary::after{ content:"▾"; font-size:11px; transition:transform .15s; }
+  .audit[open] summary::after{ transform:rotate(180deg); }
+  .audit .timeline{ margin-top:14px; }
+  .info-list{ margin:30px 0 0; display:flex; flex-direction:column; gap:22px; }
+  .info-list div{ display:grid; grid-template-columns:115px 1fr; gap:10px; align-items:baseline; }
+  .info-list dt{ font-size:12px; color:var(--ink-soft); }
+  .info-list dd{ margin:0; font-size:13px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+  .info-list dd.mono{ font-family:"Inter",sans-serif; }
+  .qr-block{ margin-top:26px; padding-top:20px; border-top:1px solid var(--line); display:flex; gap:14px; align-items:center; scroll-margin-top:90px; }
+  .qr-block #qrHolder{ background:#fff; padding:6px; border-radius:8px; border:1px solid var(--line); flex:0 0 auto; }
+  .qr-block p{ margin:0; font-size:12.5px; color:var(--ink-soft); }
+  .m-detail-head{ display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin-top:-8px; }
+  .m-detail-head h2{ font-size:23px; }
+  .m-detail-head .req-card-id{ margin:0; font-size:13px; }
+
+  @media (max-width:1100px){
+    .req-grid{ grid-template-columns:1fr; }
+    .detail-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width:680px){
+    .mapp-body .back-link{ margin-bottom:0; align-self:flex-start; }
+    .panel{ padding:20px 18px; }
+    .mapp-body .panel-h{ font-size:12px; font-family:"Inter",sans-serif; text-transform:uppercase; letter-spacing:.03em; color:var(--brand); }
+    .mapp-body .panel-h.small{ font-size:18px; font-family:"Lora",serif; text-transform:none; letter-spacing:0; color:var(--ink); }
+    .mapp-body .list-heading{ font-size:19px; margin:20px 0 4px; }
+    .mapp-body .m-detail-head h2{ font-size:23px; }
+    .next-text{ font-size:15px; font-weight:600; color:var(--ink); margin:12px 0 24px; }
+    .eyebrow-label{ margin:28px 0 12px; }
+    .form-row{ flex-wrap:nowrap; gap:16px; align-items:center; }
+    .form-thumb{ width:104px; height:111px; flex:0 0 auto; }
+    .form-thumb .ph-ic{ font-size:30px; } .form-thumb .ph-txt{ display:none; }
+    .form-links .btn.secondary{ min-width:0; background:none; border:none; padding:6px 0; min-height:36px; font-size:13px; }
+    .form-links .btn.secondary::after{ content:" →"; white-space:pre; }
+    .form-links .link-btn{ font-size:13px; font-weight:600; color:var(--brand); }
+    .summary-band{ padding:16px 18px; margin-bottom:18px; }
+    .summary-band .big{ font-size:19px; }
+  }
+
+  /* ---- New request + AI result (Figma 9:91, 9:125, 9:148, 9:177) ---- */
+  .nr-card, .result-card{ max-width:1000px; padding:34px 36px 28px; }
+  .nr-sub{ margin:12px 0 0; color:var(--ink-soft); font-size:15px; }
+  .nr-card .eyebrow-label{ display:block; margin:30px 0 12px; }
+  .ro-stack{ display:flex; flex-direction:column; gap:12px; }
+  .ro-field{ background:#F1F3F0; border-radius:var(--radius-btn); padding:14px 18px; display:flex; gap:14px; font-size:15px; color:var(--ink-soft); flex-wrap:wrap; }
+  .ro-field .v{ color:var(--ink-soft); } .ro-field .sep{ color:var(--ink-faint); }
+  .nr-card input[type=tel], .nr-card textarea, .mapp-body .field textarea, .mapp-body .field input{
+    width:100%; padding:14px 18px; border-radius:var(--radius-btn); border:1px solid var(--line); background:var(--surface); color:var(--ink); font:inherit; font-size:16px;
+  }
+  .nr-card textarea{ min-height:166px; resize:vertical; }
+  .nr-card input:focus, .nr-card textarea:focus, .dropzone:focus-within{ outline:2px solid var(--brand); outline-offset:2px; }
+  .nr-two{ display:grid; grid-template-columns:1fr 1fr; gap:36px; }
+  .nr-foot{ display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:24px; flex-wrap:wrap; }
+  .nr-foot .btn{ min-width:300px; min-height:56px; font-size:17px; }
+  .nr-hint{ margin:0; font-size:14px; color:var(--ink-soft); }
+  .nr-hint.error{ color:var(--bad); font-weight:600; }
+  .nr-hint.error::before{ content:"! "; }
+
+  .dropzone{ display:flex; min-height:166px; border-radius:var(--radius-btn); background:var(--soft); border:1px solid var(--line); cursor:pointer; overflow:hidden; position:relative; }
+  .dropzone:hover, .dropzone.drag{ border-color:var(--brand); }
+  .dropzone.drag{ background:color-mix(in srgb, var(--soft) 70%, var(--brand) 12%); }
+  .dz-empty{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:8px; padding:24px 44px; }
+  .dz-title{ font-size:20px; font-weight:600; color:var(--brand); }
+  .dz-sub{ font-size:13px; color:var(--ink-soft); }
+  .dz-ic svg{ width:34px; height:34px; color:var(--brand); }
+  .dz-preview{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:12px; }
+  .dz-preview[hidden], .dz-empty[hidden]{ display:none; }
+  .dz-preview img{ max-height:150px; max-width:100%; border-radius:8px; object-fit:contain; }
+  .dz-file{ font-size:13px; color:var(--ink); font-weight:600; overflow-wrap:anywhere; text-align:center; }
+  .dz-change{ font-size:13px; color:var(--brand); text-decoration:underline; text-underline-offset:3px; }
+
+  .result-band{ background:var(--soft); border-radius:var(--radius-band); padding:24px 28px; font-family:"Lora",serif; font-weight:600; font-size:28px; color:var(--brand); display:flex; gap:14px; align-items:center; }
+  .result-band.unsure{ background:var(--current-soft); color:var(--current); display:block; }
+  .result-band.unsure .t{ font-size:24px; }
+  .result-band.unsure .s{ font-family:"Inter",sans-serif; font-weight:400; font-size:15px; margin-top:12px; }
+  .result-type{ display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:40px; flex-wrap:wrap; }
+  .result-type h2{ margin:0; font-size:36px; }
+  .result-sub{ color:var(--ink-soft); font-size:16px; margin:16px 0 0; }
+  .result-card .eyebrow-label{ margin:50px 0 20px; }
+  .result-card .eyebrow-label.tight{ margin:0 0 14px; color:var(--ink-soft); }
+  .suggest-card{ border:1px solid var(--line); border-radius:var(--radius-card); padding:24px; margin-top:28px; display:flex; flex-direction:column; align-items:flex-start; gap:12px; }
+  .suggest-card h2{ margin:0; font-size:26px; }
+  .suggest-card p{ margin:8px 0 0; color:var(--ink-soft); font-size:15px; }
+  .result-track{ margin:50px 0 0; font-size:17px; font-weight:600; color:var(--brand); }
+  .result-track b{ margin-left:6px; }
+  .result-actions{ display:flex; gap:24px; margin-top:44px; flex-wrap:wrap; }
+  .result-actions .btn{ min-width:238px; min-height:56px; font-size:17px; }
+  .result-actions .btn.secondary{ color:var(--ink); }
+
+  @media (max-width:900px){ .nr-two{ grid-template-columns:1fr; gap:0; } }
+  @media (max-width:680px){
+    .m-page-head h2{ margin:0; }
+    .m-page-head p{ margin:8px 0 0; color:var(--ink-soft); font-size:15px; }
+    .step-h{ margin:0 0 16px; font-family:"Inter",sans-serif; font-size:14px; font-weight:600; color:var(--brand); text-transform:uppercase; letter-spacing:.03em; display:flex; gap:12px; }
+    .mapp-body .step-h{ font-size:14px; }
+    .step-h.out{ margin:12px 0 -4px 4px; }
+    .nr-step{ padding:20px; }
+    .nr-step .dropzone{ min-height:206px; }
+    .nr-step .dz-empty{ align-items:center; text-align:center; padding:20px; }
+    .mapp-body .field textarea{ min-height:144px; }
+    .mapp-body .field label{ text-transform:none; letter-spacing:0; font-size:13px; }
+    .nr-hint{ font-size:14px; margin-top:-4px; }
+    .result-card{ padding:0; background:none; border:none; display:flex; flex-direction:column; }
+    .result-band{ font-size:22px; padding:22px 20px; }
+    .result-band.unsure .t{ font-size:22px; }
+    .result-type{ margin-top:24px; }
+    .mapp-body .result-type h2, .mapp-body .suggest-card h2{ font-size:23px; }
+    .suggest-card{ background:var(--surface); margin-top:20px; }
+    .result-card .eyebrow-label{ margin:28px 0 14px; }
+    .result-track{ margin-top:32px; font-size:16px; }
+    .result-actions{ margin-top:24px; gap:12px; }
+    .result-actions .btn{ width:100%; min-width:0; }
+  }
+
+  /* ---- Toasts ---- */
+  .toasts{ position:fixed; z-index:80; right:24px; bottom:24px; display:flex; flex-direction:column; gap:10px; width:min(380px, calc(100vw - 32px)); pointer-events:none; }
+  .toast{
+    pointer-events:auto; display:flex; align-items:flex-start; gap:10px;
+    background:var(--surface); color:var(--ink); border:1px solid var(--line); border-left:4px solid var(--brand);
+    border-radius:12px; padding:12px 12px 12px 14px; box-shadow:0 14px 34px -14px rgba(0,0,0,.35); font-size:14px;
+    animation:toast-in .18s ease-out;
+  }
+  .toast svg{ width:18px; height:18px; flex:0 0 auto; margin-top:1px; color:var(--brand); }
+  .toast .msg{ flex:1; line-height:1.4; }
+  .toast .x{ background:none; border:none; color:var(--ink-faint); font-size:18px; line-height:1; padding:2px 6px; border-radius:6px; min-width:32px; min-height:32px; }
+  .toast .x:hover{ color:var(--ink); background:var(--surface-2); }
+  .toast.good{ border-left-color:var(--good); } .toast.good svg{ color:var(--good); }
+  .toast.warn{ border-left-color:var(--current); } .toast.warn svg{ color:var(--current); }
+  .toast.bad{ border-left-color:var(--bad); } .toast.bad svg{ color:var(--bad); }
+  @keyframes toast-in{ from{ transform:translateY(8px); opacity:0; } to{ transform:none; opacity:1; } }
+  @media (prefers-reduced-motion: reduce){ .toast{ animation:none; } }
+  @media (max-width:680px){ .toasts{ left:16px; right:16px; width:auto; bottom:calc(88px + env(safe-area-inset-bottom)); } }
+
+  /* ---- Confirm dialog (sits above any open modal) ---- */
+  .overlay.dialog-layer{ z-index:70; align-items:center; }
+  .modal.dialog{ max-width:440px; }
+  .dialog .modal-body{ gap:14px; }
+  .dialog p{ margin:0; color:var(--ink-soft); font-size:14px; }
+  .field .hint-error{ color:var(--bad); font-size:12.5px; margin-top:6px; }
 
   /* ---- Section header row (title + badges) ---- */
   .section-title{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; margin:26px 0 12px; display:flex; align-items:center; gap:10px; }
@@ -268,8 +488,7 @@
   .login-shell{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
   .login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow); padding:32px 30px 28px; }
   .login-brand{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:24px; }
-  .login-brand .brand-mark{ width:42px; height:42px; font-size:21px; border-radius:11px; }
-  .login-brand .brand-word{ font-size:22px; }
+  .login-brand .logo-img{ width:230px; }
   .login-card .field{ margin-bottom:16px; }
   .login-error{ background:var(--bad-soft); color:var(--bad); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px; }
   .login-card .btn{ width:100%; justify-content:center; padding:11px 18px; font-size:15px; }
@@ -283,35 +502,43 @@
   .acct-row .actions{ display:flex; gap:6px; justify-content:flex-end; }
   .role-tag{ display:inline-block; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); text-transform:capitalize; }
 
-  /* ---------------- Mobile staff app (viewport-driven, forced dark, staff-only) ---------------- */
-  .mobile-badge{
-    display:inline-flex; align-items:center; gap:8px; padding:5px 12px 5px 5px;
-    border-radius:999px; background:var(--surface-2); border:1px solid var(--line);
-  }
-  .mobile-badge .rev-mark{
-    width:22px; height:22px; border-radius:7px; background:var(--ink); color:var(--bg);
-    display:flex; align-items:center; justify-content:center; font-family:"Lora",serif; font-weight:700; font-size:12px; flex:0 0 auto;
-  }
-  .mobile-badge .rev-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); font-weight:600; }
-  .mobile-login-wrap{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px; }
+  /* ---------------- Mobile app (<=680px; follows system light/dark) ---------------- */
+  .mobile-login-wrap{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px 16px; }
 
+  /* Figma 9:57: white 90px top bar, white bottom bar with 1px border, cream body */
   .mapp-shell{ min-height:100vh; display:flex; flex-direction:column; background:var(--bg); }
-  .mapp-topbar{ display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
-  .mapp-topbar .rev-mark{ width:28px; height:28px; font-size:14px; border-radius:8px; }
-  .mapp-topbar .brand-word{ font-family:"Lora",serif; font-weight:700; font-size:16px; color:var(--ink); }
+  .mapp-topbar{
+    display:flex; align-items:center; gap:10px; padding:16px 20px 12px; background:var(--surface);
+    position:sticky; top:0; z-index:20; padding-top:max(16px, env(safe-area-inset-top));
+  }
+  .mapp-topbar .brand-text{ display:flex; flex-direction:column; gap:6px; line-height:1.2; }
+  .mapp-topbar .role{ font-size:12px; color:var(--ink-soft); }
   .mapp-topbar .spacer{ flex:1; }
-  .mapp-icon-btn{ background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 auto; }
+  .mapp-icon-btn{ background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 auto; }
   .mapp-icon-btn:hover{ color:var(--ink); }
-  .mapp-body{ flex:1; padding:22px 18px 44px; display:flex; flex-direction:column; gap:14px; max-width:520px; margin:0 auto; width:100%; }
-  .mapp-body h2{ font-size:19px; margin:0; }
-  .mapp-sub{ font-size:12.5px; color:var(--ink-faint); margin:-8px 0 4px; }
-  .mapp-tabs{ display:flex; gap:8px; margin-bottom:2px; }
-  .mapp-tab{ flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); padding:10px 12px; border-radius:10px; font-size:13px; font-weight:600; }
-  .mapp-tab.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .mapp-icon-btn svg{ width:18px; height:18px; }
+  .mapp-body{ flex:1; padding:24px 16px calc(110px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:16px; max-width:520px; margin:0 auto; width:100%; }
+  .mapp-body h2{ font-size:26px; margin:0; }
+  .mapp-sub{ font-size:13px; color:var(--ink-soft); margin:-8px 0 4px; }
   .mapp-page-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:2px; }
   .mapp-page-head h2{ margin:0; }
+
+  /* Bottom tab bar */
+  .tabbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    display:flex; background:var(--surface); border-top:1px solid var(--line);
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .tabbar-item{
+    flex:1; min-height:56px; background:none; border:none; border-radius:var(--radius-btn);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    font-size:12.5px; color:var(--ink-soft);
+  }
+  .tabbar-item svg{ width:22px; height:22px; }
+  .tabbar-item.active{ color:var(--brand); font-weight:600; }
+  .tabbar-item.active svg{ stroke-width:2; }
   .mapp-badge-row{ display:flex; gap:8px; flex-wrap:wrap; margin:-4px 0 2px; }
-  .mapp-card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
+  .mapp-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card); padding:17px 18px; box-shadow:var(--shadow); }
   .mapp-card-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .mapp-card-foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; font-size:12px; color:var(--ink-faint); }
   .mapp-stepper-wrap{ overflow-x:auto; padding:14px 2px 2px; }
@@ -339,14 +566,15 @@
 
   @media (max-width:900px){
     .app-shell{ flex-direction:column; }
-    .sidebar{ position:relative; width:100%; flex:0 0 auto; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px 14px; gap:6px; }
-    .sidebar-brand{ border-bottom:none; padding:8px 6px; }
-    .nav-label{ display:none; }
+    .sidebar{ position:relative; width:100%; flex:0 0 auto; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px 16px; gap:6px; }
+    .sidebar-brand{ padding:8px 6px; }
+    .sidebar-sub{ display:none; }
     .sidebar-nav{ display:flex; padding:0; gap:4px; }
+    .nav-item{ margin-bottom:0; }
     .sidebar-spacer{ display:none; }
     .conn-row, .reset-link{ display:none; }
     .sidebar-foot{ border-top:none; margin-left:auto; }
-    .content-header{ padding:22px 20px; }
+    .content-header{ padding:24px 20px 0; }
     .content-body{ padding:20px 20px 60px; }
     .qrow{ grid-template-columns:1fr; gap:6px; }
     .qrow.head{ display:none; }
@@ -358,7 +586,9 @@
 
 <div id="root"></div>
 
-<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="overlay" id="overlay"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div class="overlay dialog-layer" id="dialogOverlay"><div class="modal dialog" id="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialogTitle"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 /* =======================================================================
@@ -460,6 +690,8 @@ const ICONS = {
   info:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>`,
   camera:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>`,
   qr:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><path d="M15 15h3v3M20 15v6M15 20h3M20 20v1"/></svg>`,
+  plus:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>`,
+  logout:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>`,
   cap:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3 9l9 5 9-5-9-5Z"/><path d="M7 11.5V16c0 1.5 2.5 3 5 3s5-1.5 5-3v-4.5"/><path d="M21 9v5"/></svg>`
 };
 
@@ -468,10 +700,10 @@ const ICONS = {
 // enforced at the RLS level too — see supabase/schema.sql) instead of the old
 // single shared "Staff" role that covered every office's queue at once.
 const PAGES = {
-  student: [ { id:"active",        label:"Active Requests", icon:"doc" },
-             { id:"notifications", label:"Notifications",   icon:"bell" } ],
-  admin:   [ { id:"overview",      label:"System Overview", icon:"grid" },
-             { id:"accounts",      label:"Account Management", icon:"users" } ]
+  student: [ { id:"active",        label:"Active requests", short:"Requests", icon:"doc" },
+             { id:"notifications", label:"Activity",        short:"Activity", icon:"bell" } ],
+  admin:   [ { id:"overview",      label:"System Overview", short:"Overview", icon:"grid" },
+             { id:"accounts",      label:"Account Management", short:"Accounts", icon:"users" } ]
 };
 const OFFICE_PAGES = {
   "Registrar":     { id:"registrar",    label:"Registrar Queue",      icon:"inbox" },
@@ -686,6 +918,7 @@ function renderRoot(){
   if(!apiOnline){ view.innerHTML = offlineHtml(); wireOfflineRetry(); return; }
   view.innerHTML = renderPage();
   wireViewEvents();
+  afterRender();
 }
 
 /* ---------------- Login ---------------- */
@@ -693,10 +926,7 @@ function renderRoot(){
 function renderLogin(){
   const card = document.getElementById("loginCard");
   card.innerHTML = `
-    <div class="login-brand">
-      <div class="brand-mark">&Omega;</div>
-      <div class="brand-word">DocuRoute</div>
-    </div>
+    <div class="login-brand">${logoHtml("full", 44)}</div>
     ${loginError ? `<div class="login-error">${loginError}</div>` : ""}
     <div class="field"><label>School Email Address</label><input id="lUser" autocomplete="username" placeholder="you@mymail.mapua.edu.ph"></div>
     <div class="field"><label>Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
@@ -758,13 +988,12 @@ function renderSidebar(){
   const current = state.page || pages[0].id;
   el.innerHTML = `
     <div class="sidebar-brand">
-      <div class="brand-mark">&Omega;</div>
-      <div class="brand-word">DocuRoute</div>
+      <img class="logo-img" src="assets/logo-full-light.png" alt="DocuRoute" width="190" height="36">
     </div>
-    <div class="nav-label">Navigation</div>
-    <nav class="sidebar-nav">
+    <div class="sidebar-sub">MAPÚA UNIVERSITY</div>
+    <nav class="sidebar-nav" aria-label="Main">
       ${pages.map(p => `
-        <button class="nav-item ${current===p.id?"active":""}" data-page="${p.id}">
+        <button class="nav-item ${current===p.id?"active":""}" data-page="${p.id}" ${current===p.id?'aria-current="page"':""}>
           ${ICONS[p.icon]}<span>${p.label}</span>
         </button>
       `).join("")}
@@ -772,7 +1001,7 @@ function renderSidebar(){
     <div class="sidebar-spacer"></div>
     <div class="conn-row">
       <span class="conn-dot ${apiOnline?"":"off"}"></span>
-      ${apiOnline ? "Connected to Supabase" : "Supabase unreachable"}
+      ${apiOnline ? "Connected" : "Offline — can't reach server"}
     </div>
     <button class="reset-link" id="logoutBtn">&#8592; log out</button>
     <div class="sidebar-foot">
@@ -784,7 +1013,7 @@ function renderSidebar(){
     </div>
   `;
   el.querySelectorAll("[data-page]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{ state.page = btn.dataset.page; renderRoot(); });
+    btn.addEventListener("click", ()=>{ state.page = btn.dataset.page; resetStudentView(); renderRoot(); });
   });
   document.getElementById("logoutBtn").addEventListener("click", logout);
 }
@@ -837,22 +1066,19 @@ function wireOfflineRetry(){
 
 const MOBILE_QUERY = window.matchMedia("(max-width: 680px)");
 function isMobile(){ return MOBILE_QUERY.matches; }
+// Mobile used to force dark mode; it now follows the phone's own light/dark
+// setting via the prefers-color-scheme tokens, same as desktop.
 function applyViewportTheme(){
-  if(isMobile()) document.documentElement.setAttribute("data-theme", "dark");
-  else document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-theme");
 }
 
 let mobileScreen = "menu"; // staff tool flow only: menu | capture | scan
 let qrStreamHandle = null;
 
-function mobileBadgeHtml(){
-  return `<div class="mobile-badge"><span class="rev-mark">&Omega;</span><span class="rev-label">Mobile Version</span></div>`;
-}
-
 function renderMobileRoot(){
   const root = document.getElementById("root");
   if(!session){
-    root.innerHTML = `<div class="mobile-login-wrap">${mobileBadgeHtml()}<div class="login-card" id="loginCard"></div></div>`;
+    root.innerHTML = `<div class="mobile-login-wrap"><div class="login-card" id="loginCard"></div></div>`;
     renderLogin();
     return;
   }
@@ -864,53 +1090,88 @@ function renderMobileRoot(){
   if(!state.page || !pagesForSession(session).some(p => p.id === state.page)) state.page = pagesForSession(session)[0].id;
   root.innerHTML = mobileAppShellHtml();
   wireMobileView();
+  afterRender();
 }
 
+// Logo on light surfaces: forest version, swapped for the white version when
+// the device is in dark mode. kind = "full" (mark + wordmark) | "mark".
+function logoHtml(kind, height){
+  const ratio = kind === "full" ? 1980/381 : 405/381;
+  const w = Math.round(height * ratio);
+  return `<picture class="logo-img">
+    <source srcset="assets/logo-${kind}-light.png" media="(prefers-color-scheme: dark)">
+    <img src="assets/logo-${kind}.png" alt="DocuRoute" width="${w}" height="${height}">
+  </picture>`;
+}
+
+const MOBILE_ROLE_LABEL ={ student:"Student", admin:"Admin" };
 function mobileTopbarHtml(){
+  const role = session.role === "staff" ? (session.office || "Staff") : MOBILE_ROLE_LABEL[session.role];
   return `
-    <div class="mapp-topbar">
-      <span class="rev-mark">&Omega;</span>
-      <span class="brand-word">DocuRoute</span>
+    <header class="mapp-topbar">
+      <span class="brand-text">${logoHtml("full", 28)}<span class="role">${role}</span></span>
       <span class="spacer"></span>
-      ${mobileBadgeHtml()}
-      <button class="mapp-icon-btn" id="mobileLogoutBtn3" title="Log out">&#8592;</button>
-    </div>`;
+      <button class="mapp-icon-btn" id="mobileLogoutBtn3" title="Log out" aria-label="Log out">${ICONS.logout}</button>
+    </header>`;
 }
 
 function mobileAppShellHtml(){
-  return `<div class="mapp-shell">${mobileTopbarHtml()}<div class="mapp-body" id="mappBody">${mobileScreenHtml()}</div></div>`;
+  return `<div class="mapp-shell">${mobileTopbarHtml()}<main class="mapp-body" id="mappBody">${mobileScreenHtml()}</main>${mobileTabbarHtml()}</div>`;
 }
 
-function mobileTabsHtml(pages, current){
-  return `<div class="mapp-tabs">${pages.map(p => `<button class="mapp-tab ${current===p.id?"active":""}" data-mtab="${p.id}">${p.label}</button>`).join("")}</div>`;
+// Bottom tab bar (Figma 9:57). Each item is either a page (data-mtab), a staff
+// tool screen (data-mscreen), or an action (data-maction).
+function mobileTabbarHtml(){
+  let items;
+  if(session.role === "student"){
+    items = PAGES.student.map(p => ({ attr:`data-mtab="${p.id}"`, label:p.short, icon:p.icon, active: !state.newReq && state.page === p.id }))
+      .concat([{ attr:`data-maction="new"`, label:"New", icon:"plus", active:!!state.newReq }]);
+  } else if(session.role === "admin"){
+    items = PAGES.admin.map(p => ({ attr:`data-mtab="${p.id}"`, label:p.short, icon:p.icon, active: state.page === p.id }));
+  } else {
+    items = [
+      { attr:`data-mscreen="menu"`,    label:"Home",    icon:"inbox",  active: mobileScreen === "menu" },
+      { attr:`data-mscreen="capture"`, label:"Capture", icon:"camera", active: mobileScreen === "capture" },
+      { attr:`data-mscreen="scan"`,    label:"Scan",    icon:"qr",     active: mobileScreen === "scan" }
+    ];
+  }
+  return `<nav class="tabbar" aria-label="Main">${items.map(it => `
+    <button class="tabbar-item ${it.active?"active":""}" ${it.attr} ${it.active?'aria-current="page"':""}>${ICONS[it.icon]}<span>${it.label}</span></button>`).join("")}</nav>`;
 }
 
 function mobileScreenHtml(){
   if(session.role === "staff") return mobileStaffScreenHtml();
-  if(session.role === "student") return mobileTabsHtml(PAGES.student, state.page) + (state.page === "notifications" ? mobileStudentNotificationsHtml() : mobileStudentActiveHtml());
-  if(session.role === "admin") return mobileTabsHtml(PAGES.admin, state.page) + (state.page === "accounts" ? mobileAdminAccountsHtml() : mobileAdminOverviewHtml());
+  if(session.role === "student") return state.page === "notifications" ? mobileStudentNotificationsHtml() : mobileStudentActiveHtml();
+  if(session.role === "admin") return state.page === "accounts" ? mobileAdminAccountsHtml() : mobileAdminOverviewHtml();
   return "";
 }
 
 /* ---- Student: mobile ---- */
 
+// Same cards/detail as desktop; CSS reflows them into one column.
 function mobileStudentActiveHtml(){
-  const mine = myRequests();
-  const cards = mine.map(r => `
-    <div class="mapp-card">
-      <div class="mapp-card-head">
-        <div><div style="font-family:'Lora',serif;font-weight:600;font-size:15.5px;">${typeLabel(r.type)}</div><div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${r.id}</div></div>
-        ${pill(r.status)}
+  if(state.newReq) return `
+    <div class="m-page-head"><h2>New request</h2><p>Take a photo to begin.</p></div>
+    ${newRequestFormHtml(true)}`;
+  if(state.result) return `
+    <div class="m-page-head"><h2>Request received</h2></div>
+    ${resultBodyHtml(state.result)}`;
+  if(state.detailId){
+    const r = myRequests().find(x => x.id === state.detailId);
+    if(r) return `
+      <button class="back-link" data-back>← Your requests</button>
+      <div class="m-detail-head">
+        <h2>${typeLabel(r.type)}</h2>
+        <div class="req-card-id">${r.id}</div>
+        ${locationPill(r)}
       </div>
-      <div class="mapp-stepper-wrap">${stepperHtml(r.route, r.hop, r.status)}</div>
-      <div class="mapp-card-foot">
-        <span>Currently at <b>${currentOfficeLabel(r)}</b></span>
-        <button class="btn secondary small" data-open="${r.id}">Details</button>
-      </div>
-    </div>`).join("") || `<div class="empty">No requests yet — submit your first one.</div>`;
+      ${studentDetailBodyHtml(r)}`;
+    state.detailId = null;
+  }
   return `
-    <div class="mapp-page-head"><h2>Active Requests</h2><button class="btn small" id="newReqBtn">+ New</button></div>
-    ${cards}
+    <h2>Your requests</h2>
+    <button class="btn block" data-new-req>+ New request</button>
+    ${studentListHtml(true)}
   `;
 }
 
@@ -1059,7 +1320,10 @@ function wireMobileView(){
   const logoutBtn = document.getElementById("mobileLogoutBtn3");
   if(logoutBtn) logoutBtn.addEventListener("click", ()=>{ stopQrScanner(); logout(); });
   document.querySelectorAll("[data-mtab]").forEach(el=>{
-    el.addEventListener("click", ()=>{ state.page = el.dataset.mtab; renderRoot(); });
+    el.addEventListener("click", ()=>{ state.page = el.dataset.mtab; resetStudentView(); renderRoot(); });
+  });
+  document.querySelectorAll('[data-maction="new"]').forEach(el=>{
+    el.addEventListener("click", openNewRequestModal);
   });
   if(session.role !== "staff") return;
   document.querySelectorAll("[data-mscreen]").forEach(el=>{
@@ -1161,36 +1425,115 @@ function handleQrDecoded(text){
 
 /* ---------------- Status helpers ---------------- */
 
-function pill(status){
-  const map = {
-    submitted:["neutral","Submitted"], review:["neutral","AI Review"],
-    unverified:["bad","Unverified"], routed:["current","Routed"],
-    progress:["current","In Progress"], completed:["good","Completed"],
-    approved:["good","Approved"], declined:["bad","Declined"]
-  };
-  const [cls,label] = map[status] || ["neutral",status];
-  return `<span class="pill ${cls}">${label}</span>`;
+// One status vocabulary (#12): plain words for students, operational words for
+// staff/admin. Tone picks the pill color; the icon keeps meaning visible
+// without color. "Unverified" is amber, not red — it's the normal path for
+// most real photos (only ~11% clear 70%), not an error.
+const STATUS_ICON = {
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+  spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg>`,
+  eye:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  arrow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
+  dots:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`,
+  x:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`,
+  alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4M12 17h.01"/></svg>`,
+  info:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`
+};
+const STATUS = {
+  submitted:  { tone:"neutral", icon:"clock", student:"Submitted",              staff:"Submitted" },
+  review:     { tone:"neutral", icon:"spark", student:"Reading your form",      staff:"AI processing" },
+  unverified: { tone:"amber",   icon:"eye",   student:"Registrar will confirm", staff:"Needs confirmation" },
+  routed:     { tone:"soft",    icon:"arrow", student:"Routed",                 staff:"Routed" },
+  progress:   { tone:"amber",   icon:"dots",  student:"In progress",            staff:"In progress" },
+  completed:  { tone:"good",    icon:"check", student:"Completed",              staff:"Completed" },
+  approved:   { tone:"good",    icon:"check", student:"Approved",               staff:"Approved" },
+  declined:   { tone:"bad",     icon:"x",     student:"Declined",               staff:"Declined" }
+};
+function isStudentView(){ return !session || session.role === "student"; }
+function statusLabel(status){
+  const s = STATUS[status];
+  return s ? (isStudentView() ? s.student : s.staff) : status;
 }
+function pill(status){
+  const s = STATUS[status] || { tone:"neutral", icon:"clock" };
+  return `<span class="pill ${s.tone}">${STATUS_ICON[s.icon]}${statusLabel(status)}</span>`;
+}
+// Staff see the AI's confidence beside the status; students don't (their AI
+// result is explained in words on the result screen instead).
 function confPill(r){
-  if(r.status==="unverified") return `<span class="pill bad">${r.confidence}% Conflict</span>`;
-  if(r.status==="declined") return `<span class="pill bad">Declined</span>`;
-  if(r.status==="completed") return `<span class="pill good">Completed</span>`;
-  if(r.confidence!==null) return `<span class="pill good">${r.confidence}% Suggested</span>`;
-  return pill(r.status);
+  const showConf = !isStudentView() && r.confidence !== null && ["unverified","routed","progress"].includes(r.status);
+  return pill(r.status) + (showConf ? `<span class="conf-chip ${r.confidence < 70 ? "low" : ""}" title="AI confidence">${r.confidence}%</span>` : "");
 }
 function statusCaption(r){
-  if(r.status==="unverified") return "Confidence below 70% threshold — needs manual classification.";
-  if(r.status==="declined"){ const last=r.log[r.log.length-1]; return last ? last.text : ""; }
+  const student = isStudentView();
+  if(r.status==="unverified") return student
+    ? "The AI wasn't sure which form this is, so the Registrar will confirm it."
+    : "Below the 70% confidence gate — confirm the type to route it.";
+  if(r.status==="declined"){ const last=r.log[r.log.length-1]; return last ? esc(last.text) : ""; }
   if(r.status==="completed") return "All offices cleared — audit trail closed.";
-  if(r.status==="submitted" || r.status==="review") return "Awaiting AI Processing Layer.";
+  if(r.status==="submitted" || r.status==="review") return student ? "Reading your form…" : "Waiting for the AI Processing Layer.";
   const prevIdx = r.hop - 1;
   return prevIdx>=0 ? `${r.route[prevIdx]} → ${r.route[r.hop]}` : `Awaiting action at ${r.route[r.hop]}`;
 }
 function currentOfficeLabel(req){
   if(req.status==="submitted" || req.status==="review") return "AI Processing Layer";
-  if(req.status==="unverified") return "Intake Clerk queue";
+  if(req.status==="unverified") return "Registrar review";
   if(req.status==="completed" || req.status==="declined") return "Closed";
   return req.route[req.hop];
+}
+
+/* ---------------- Toasts + confirm dialog (replace alert/confirm/prompt) ---------------- */
+
+const TOAST_ICON = { info:"info", good:"check", warn:"alert", bad:"alert" };
+function showToast(message, tone, opts){
+  tone = tone || "info"; opts = opts || {};
+  const wrap = document.getElementById("toasts");
+  const el = document.createElement("div");
+  el.className = `toast ${tone}`;
+  el.setAttribute("role", tone === "bad" ? "alert" : "status");
+  el.innerHTML = `${STATUS_ICON[TOAST_ICON[tone]]}<div class="msg"></div><button class="x" aria-label="Dismiss">&times;</button>`;
+  el.querySelector(".msg").textContent = message;
+  const close = ()=>{ el.remove(); };
+  el.querySelector(".x").addEventListener("click", close);
+  wrap.appendChild(el);
+  const ms = opts.timeout ?? (tone === "bad" ? 8000 : 4500);
+  if(ms) setTimeout(close, ms);
+}
+
+// Promise-based confirm. With `reason`, shows a textarea that must be filled.
+// Resolves { ok:boolean, reason:string }.
+function confirmDialog({ title, body, confirmLabel, danger, reason }){
+  return new Promise(resolve=>{
+    const layer = document.getElementById("dialogOverlay");
+    const box = document.getElementById("dialog");
+    box.innerHTML = `
+      <div class="modal-head"><h2 id="dialogTitle">${title}</h2></div>
+      <div class="modal-body">
+        ${body ? `<p>${body}</p>` : ""}
+        ${reason ? `<div class="field"><label for="dlgReason">${reason.label}</label>
+          <textarea id="dlgReason" placeholder="${reason.placeholder || ""}"></textarea>
+          <div class="hint-error" id="dlgReasonErr" hidden>Please give a reason — the student will see it.</div></div>` : ""}
+      </div>
+      <div class="modal-foot">
+        <button class="btn secondary" id="dlgCancel">Cancel</button>
+        <button class="btn ${danger ? "danger" : ""}" id="dlgOk">${confirmLabel || "Confirm"}</button>
+      </div>`;
+    layer.classList.add("open");
+    const finish = (ok)=>{
+      const text = reason ? document.getElementById("dlgReason").value.trim() : "";
+      if(ok && reason && !text){ document.getElementById("dlgReasonErr").hidden = false; document.getElementById("dlgReason").focus(); return; }
+      layer.classList.remove("open"); box.innerHTML = "";
+      document.removeEventListener("keydown", onKey);
+      resolve({ ok, reason:text });
+    };
+    const onKey = (e)=>{ if(e.key === "Escape") finish(false); };
+    document.addEventListener("keydown", onKey);
+    document.getElementById("dlgCancel").addEventListener("click", ()=>finish(false));
+    document.getElementById("dlgOk").addEventListener("click", ()=>finish(true));
+    layer.onclick = (e)=>{ if(e.target === layer) finish(false); };
+    (reason ? document.getElementById("dlgReason") : document.getElementById("dlgOk")).focus();
+  });
 }
 
 function stepDotClass(i, route, hop, status){
@@ -1217,35 +1560,209 @@ function myRequests(){
   return state.requests.filter(r => r.student === session.name);
 }
 
-function studentActiveView(){
-  const mine = myRequests();
-  const cards = mine.map(r => `
-    <div class="req-step-card">
-      <div class="req-step-top">
-        <div class="req-step-name">
-          <span class="title">${typeLabel(r.type)}</span>
-          <span class="id mono">${r.id}</span>
-        </div>
-        <button class="info-btn" data-open="${r.id}" title="View details">${ICONS.info}</button>
-      </div>
-      ${stepperHtml(r.route, r.hop, r.status)}
-      <div class="req-step-foot">${pill(r.status)}<span class="req-step-meta">Currently at <b>${currentOfficeLabel(r)}</b> · submitted ${fmtTs(r.log[0].ts)}</span></div>
-    </div>
-  `).join("") || `<div class="empty">No requests yet — submit your first one.</div>`;
+/* ---- Student: shared pieces (Figma 9:10, 9:57, 9:200, 9:240) ---- */
 
+const CURRENT_TERM = "1Q / AY 2026–2027";
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+const isClosed = r => r.status === "completed" || r.status === "declined";
+
+// Segmented route bar: one segment per office, forest = cleared/current,
+// grey = still ahead. Labels carry ●/○ plus the word, not color alone.
+function routeBarHtml(req){
+  if(!req.route || !req.route.length){
+    return `<div class="route-bar pending"><div class="seg"><span class="bar"></span><span class="lbl">Office decided after confirmation</span></div></div>`;
+  }
+  return `<ol class="route-bar" aria-label="Route">${req.route.map((office, i)=>{
+    let st = "todo";
+    if(req.status === "completed" || i < req.hop) st = "done";
+    else if(i === req.hop && ["routed","progress"].includes(req.status)) st = "current";
+    else if(i === req.hop && req.status === "declined") st = "bad";
+    const word = { done:"cleared", current:"current step", bad:"declined here", todo:"upcoming" }[st];
+    return `<li class="seg ${st}"><span class="bar"></span><span class="lbl">${st === "todo" ? "○" : "●"}&nbsp; ${office}<span class="sr-only"> — ${word}</span></span></li>`;
+  }).join("")}</ol>`;
+}
+
+function declineReason(r){
+  const hit = [...r.log].reverse().find(l => /declined the request/.test(l.text));
+  const m = hit && hit.text.match(/reason: '([\s\S]*)'\.?$/);
+  return m ? m[1] : "";
+}
+
+// Plain-language "what happens next" line for the student.
+function nextStepText(r){
+  const cur = r.route[r.hop], next = r.route[r.hop + 1];
+  switch(r.status){
+    case "submitted": case "review": return "We're reading your form. This only takes a few seconds.";
+    case "unverified": return "The AI wasn't sure which form this is, so the Registrar will confirm it. Once confirmed, it's sent on automatically.";
+    case "routed": return `Your form is with ${cur}.` + (next ? ` ${next} is next.` : " This is the last office.");
+    case "progress": return `${cur} is reviewing your form.` + (next ? ` ${next} is next.` : " This is the last office.");
+    case "completed": return "Every office has cleared your request. You're done.";
+    case "declined": { const why = declineReason(r); return `${cur} declined this request.` + (why ? ` Reason: ${why}` : ""); }
+    default: return "";
+  }
+}
+
+// "At Dean's Office" style location pill used on the detail header.
+function locationPill(r){
+  if(isClosed(r) || ["submitted","review","unverified"].includes(r.status)) return pill(r.status);
+  return `<span class="pill soft">${STATUS_ICON.arrow}At ${r.route[r.hop]}</span>`;
+}
+
+function studentCardHtml(r){
   return `
-    <div class="content-header">
-      <h1>Active Requests</h1>
-      <p>Track a submitted form the same way you'd track a courier parcel — status, current office, and QR-linked history.</p>
-    </div>
-    <div class="content-body">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:6px;">
-        <div class="section-tab">My Request <span class="chev">&#8964;</span></div>
-        <button class="btn" id="newReqBtn">+ New Request</button>
+    <article class="req-card">
+      <div class="req-card-top">
+        <div>
+          <h3 class="req-card-title">${typeLabel(r.type)}</h3>
+          <div class="req-card-id">${r.id}</div>
+        </div>
+        ${pill(r.status)}
       </div>
-      ${cards}
-    </div>
+      <div class="req-card-where">Currently at&nbsp; ${currentOfficeLabel(r)}</div>
+      ${routeBarHtml(r)}
+      <button class="link-btn" data-open="${r.id}">View route and details <span aria-hidden="true">→</span></button>
+    </article>`;
+}
+
+function studentListHtml(mobile){
+  const mine = myRequests();
+  const active = mine.filter(r => !isClosed(r));
+  const closed = mine.filter(isClosed);
+  const reviewing = active.filter(r => r.status === "unverified").length;
+  const band = !mine.length ? "" : `
+    <div class="summary-band">
+      <div class="big">${active.length} active request${active.length === 1 ? "" : "s"}</div>
+      <div class="sub">${reviewing ? `${reviewing} need${reviewing === 1 ? "s" : ""} Registrar review` : (active.length ? "Everything is moving — no action needed from you." : "Nothing in progress right now.")}</div>
+    </div>`;
+  const empty = `
+    <div class="empty-state">
+      <div class="empty-ic" aria-hidden="true">${ICONS.doc}</div>
+      <h3>No requests yet</h3>
+      <p>Photograph your paper form and DocuRoute will figure out where it needs to go.</p>
+      <button class="btn" data-new-req>+ New request</button>
+    </div>`;
+  return `
+    ${band}
+    ${mine.length ? `<div class="req-grid">${active.map(studentCardHtml).join("")}</div>` : empty}
+    ${closed.length ? `<h2 class="list-heading">Closed</h2><div class="req-grid">${closed.map(studentCardHtml).join("")}</div>` : ""}`;
+}
+
+function resetStudentView(){ state.detailId = null; state.newReq = false; state.result = null; }
+
+function studentActiveView(){
+  if(state.newReq) return newRequestView();
+  if(state.result) return resultView();
+  if(state.detailId) return studentDetailView();
+  return `
+    <header class="content-header page-head">
+      <div>
+        <div class="eyebrow">${CURRENT_TERM.replace("/", "&nbsp;&nbsp;/&nbsp;&nbsp;")}</div>
+        <h1>Your requests</h1>
+        <p>Track your forms.</p>
+      </div>
+      <button class="btn head-btn" data-new-req>+ New request</button>
+    </header>
+    <div class="content-body">${studentListHtml(false)}</div>
   `;
+}
+
+// Student detail is a full page (desktop + mobile), not a modal.
+function studentDetailBodyHtml(r){
+  const hasDoc = !!r.documentPath;
+  return `
+    <div class="detail-grid">
+      <section class="panel">
+        <h2 class="panel-h">What happens next</h2>
+        <p class="next-text">${esc(nextStepText(r))}</p>
+        ${routeBarHtml(r)}
+
+        <div class="eyebrow-label">Form preview</div>
+        <div class="form-row">
+          <div class="form-thumb" id="formThumb" data-path="${hasDoc ? esc(r.documentPath) : ""}">
+            <span class="ph-ic" aria-hidden="true">▤</span>
+            <span class="ph-txt">${hasDoc ? "Paper scan preview" : "No form attached"}</span>
+          </div>
+          <div class="form-links">
+            ${hasDoc ? `<button class="btn secondary" id="viewDocBtn">View attached form</button>` : ""}
+            <a class="link-btn" href="#qrBlock">QR &amp; tracking <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+
+        <details class="audit">
+          <summary>Activity &amp; audit trail</summary>
+          <div class="timeline">
+            ${[...r.log].reverse().map(l=>`
+              <div class="tl-item">
+                <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+                <div class="tl-body"><div class="txt">${esc(l.text)}</div><div class="ts">${fmtTs(l.ts)}</div></div>
+              </div>`).join("")}
+          </div>
+        </details>
+      </section>
+
+      <aside class="panel info-panel">
+        <h2 class="panel-h small">Request information</h2>
+        <dl class="info-list">
+          <div><dt>Student</dt><dd>${esc(r.student)}</dd></div>
+          <div><dt>Program</dt><dd>${esc(r.program)}</dd></div>
+          <div><dt>Current office</dt><dd>${currentOfficeLabel(r)}</dd></div>
+          <div><dt>AI confidence</dt><dd>${r.confidence !== null ? r.confidence + "%" : "—"}</dd></div>
+          <div><dt>Tracking ID</dt><dd class="mono">${r.id}</dd></div>
+        </dl>
+        <div class="qr-block" id="qrBlock">
+          <div id="qrHolder"></div>
+          <p>Show this at any office to look up your form.</p>
+        </div>
+      </aside>
+    </div>`;
+}
+
+function studentDetailView(){
+  const r = myRequests().find(x => x.id === state.detailId);
+  if(!r){ state.detailId = null; return studentActiveView(); }
+  return `
+    <header class="content-header page-head">
+      <div>
+        <button class="back-link" data-back>← Your requests</button>
+        <h1>${typeLabel(r.type)}</h1>
+        <p>${r.id} &nbsp;•&nbsp; Submitted ${fmtTs(r.log[0].ts)}</p>
+      </div>
+      <div class="head-pill">${locationPill(r)}</div>
+    </header>
+    <div class="content-body">${studentDetailBodyHtml(r)}</div>`;
+}
+
+// Runs after every render: fills the QR code and the form thumbnail on the
+// student detail page (the thumbnail needs a short-lived signed URL).
+function afterRender(){
+  document.querySelectorAll("[data-new-req]").forEach(b => b.addEventListener("click", openNewRequestModal));
+  document.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", ()=>{ resetStudentView(); renderRoot(); }));
+  wireNewRequestForm();
+  if(!state.detailId || !session || session.role !== "student") return;
+  const r = myRequests().find(x => x.id === state.detailId);
+  if(!r) return;
+  const qr = document.getElementById("qrHolder");
+  if(qr){ try{ new QRCode(qr, { text:r.id, width:96, height:96, colorDark:"#19261E", colorLight:"#ffffff" }); }catch(e){ qr.textContent = r.id; } }
+  const viewBtn = document.getElementById("viewDocBtn");
+  if(viewBtn) viewBtn.addEventListener("click", ()=>openSignedDoc(r.documentPath));
+  const thumb = document.getElementById("formThumb");
+  if(thumb && r.documentPath && /\.(jpe?g|png|webp|gif)$/i.test(r.documentPath)){
+    sb.storage.from("documents").createSignedUrl(r.documentPath, 300).then(({ data })=>{
+      if(!data || !data.signedUrl || !document.body.contains(thumb)) return;
+      const img = new Image();
+      img.alt = "Photo of your submitted form";
+      img.onload = ()=>{ thumb.innerHTML = ""; thumb.appendChild(img); thumb.classList.add("has-img"); };
+      img.src = data.signedUrl;
+    });
+  }
+}
+
+async function openSignedDoc(path){
+  const { data, error } = await sb.storage.from("documents").createSignedUrl(path, 60);
+  if(!error && data && data.signedUrl) window.open(data.signedUrl, "_blank");
+  else showToast("Couldn't open the attached form. Try again in a moment.", "bad");
 }
 
 function studentNotificationsView(){
@@ -1570,7 +2087,7 @@ function accountModalHtml(existing){
 
 function openAccountModal(existing){
   if(!existing){
-    alert("Creating a login needs a privileged server call (Supabase service-role key) — coming with the Render admin service. For now, add the user in Supabase Studio -> Authentication -> Users, then edit their role/name here.");
+    showToast("Creating a login needs the server-side admin service (planned). For now, add the user in Supabase → Authentication → Users, then edit their role here.", "info", { timeout:9000 });
     return;
   }
   const modal = document.getElementById("modal");
@@ -1591,6 +2108,7 @@ function openAccountModal(existing){
       await refreshAccounts();
       closeModal();
       renderRoot();
+      showToast("Account saved.", "good");
     }catch(e){
       document.getElementById("acctError").innerHTML = `<div class="login-error">${e.message || "Could not reach Supabase."}</div>`;
     }
@@ -1598,7 +2116,7 @@ function openAccountModal(existing){
 }
 
 async function deleteAccount(id){
-  alert("Deleting a login needs a privileged server call (Supabase service-role key) — coming with the Render admin service.");
+  showToast("Deleting a login needs the server-side admin service (planned). Remove it in Supabase → Authentication → Users for now.", "info", { timeout:9000 });
 }
 
 /* ---------------- New Request modal ---------------- */
@@ -1664,11 +2182,166 @@ function typeFieldsHtml(type){
     </div>`;
 }
 
+// Students get a full New request page (Figma 9:91 / 9:125); the old modal
+// stays only as a fallback for any non-student caller.
 function openNewRequestModal(){
+  if(session && session.role === "student"){
+    state.page = "active"; state.detailId = null; state.result = null; state.newReq = true;
+    renderRoot(); window.scrollTo(0, 0); return;
+  }
   const modal = document.getElementById("modal");
   modal.innerHTML = newRequestModalHtml();
   document.getElementById("overlay").classList.add("open");
   modal.querySelector("#submitReqBtn").addEventListener("click", handleSubmitRequest);
+}
+
+// Contact number is remembered on this device until profiles.contact_no
+// exists (plan step 7). Browser storage can be unavailable — never required.
+const CONTACT_KEY = "docuroute.contactNo";
+function savedContact(){ try{ return localStorage.getItem(CONTACT_KEY) || ""; }catch(e){ return ""; } }
+function rememberContact(v){ try{ if(v) localStorage.setItem(CONTACT_KEY, v); }catch(e){} }
+
+function newRequestFormHtml(mobile){
+  const s = session;
+  const ro = (value, label) => `<div class="ro-field"><span class="v">${esc(value || "—")}</span><span class="sep">/</span><span class="l">${label}</span></div>`;
+  const drop = `
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fFile" accept="image/*,application/pdf" class="sr-only">
+      <span class="dz-empty">
+        ${mobile
+          ? `<span class="dz-ic" aria-hidden="true">${ICONS.camera}</span><span class="dz-title">Take photo</span><span class="dz-sub">or choose from gallery</span>`
+          : `<span class="dz-title"><span aria-hidden="true">↑</span>&nbsp; Take photo / upload scan</span><span class="dz-sub">JPG, PNG or PDF of your paper form</span>`}
+      </span>
+      <span class="dz-preview" hidden>
+        <img id="dzImg" alt="Preview of your form" hidden>
+        <span class="dz-file" id="dzFile"></span>
+        <span class="dz-change">Change photo</span>
+      </span>
+    </label>`;
+  const details = `<textarea id="tDetails" placeholder="${mobile ? "Tell us what you need (optional)" : "Add details to help the office…"}"></textarea>`;
+  const contact = `<input id="fContact" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XX XXX XXXX" value="${esc(savedContact())}">`;
+  const hidden = `<input type="hidden" id="fName" value="${esc(s.name)}"><input type="hidden" id="fStudentNo" value="${esc(s.studentNo || "")}"><input type="hidden" id="fProgram" value="${esc(s.program || "")}">`;
+
+  if(mobile) return `
+    ${hidden}
+    <section class="panel nr-step"><h3 class="step-h"><span>1</span> Add paper form</h3>${drop}</section>
+    <h3 class="step-h out"><span>2</span> Request details</h3>
+    <div class="field">${details}</div>
+    <div class="field"><label for="fContact">Contact number</label>${contact}</div>
+    <p class="nr-hint" id="newReqHint">Name, student no. and program are saved from your profile.</p>
+    <button class="btn block" id="submitReqBtn">Submit &amp; classify</button>`;
+
+  return `
+    ${hidden}
+    <section class="panel nr-card">
+      <h2 class="panel-h">New request</h2>
+      <p class="nr-sub">Type is detected automatically.</p>
+      <div class="eyebrow-label">Your student information</div>
+      <div class="ro-stack">${ro(s.name, "Name (from your profile)")}${ro(s.studentNo, "Student number (read-only)")}${ro(s.program, "Program (read-only)")}</div>
+      <label class="eyebrow-label" for="fContact">Contact number</label>
+      ${contact}
+      <div class="nr-two">
+        <div><div class="eyebrow-label">Paper form</div>${drop}</div>
+        <div><label class="eyebrow-label" for="tDetails">Request details (optional)</label>${details}</div>
+      </div>
+      <div class="nr-foot">
+        <p class="nr-hint" id="newReqHint">Please provide a photo or request details.</p>
+        <button class="btn" id="submitReqBtn">Submit &amp; classify</button>
+      </div>
+    </section>`;
+}
+
+function newRequestView(){
+  return `
+    <header class="content-header">
+      <div class="eyebrow">${CURRENT_TERM.replace("/", "&nbsp;&nbsp;/&nbsp;&nbsp;")}</div>
+      <button class="back-link" data-back>← Your requests</button>
+      <h1>Submit a new request</h1>
+      <p>Upload a form to get started.</p>
+    </header>
+    <div class="content-body">${newRequestFormHtml(false)}</div>`;
+}
+
+function wireNewRequestForm(){
+  const input = document.getElementById("fFile");
+  if(!input || !document.getElementById("submitReqBtn")) return;
+  const zone = document.getElementById("dropzone");
+  const showFile = (file)=>{
+    const img = document.getElementById("dzImg");
+    zone.querySelector(".dz-empty").hidden = !!file;
+    zone.querySelector(".dz-preview").hidden = !file;
+    zone.classList.toggle("filled", !!file);
+    if(!file) return;
+    document.getElementById("dzFile").textContent = file.name;
+    if(file.type.startsWith("image/")){ img.src = URL.createObjectURL(file); img.hidden = false; }
+    else { img.hidden = true; img.removeAttribute("src"); }
+    clearHintError();
+  };
+  input.addEventListener("change", ()=> showFile(input.files[0]));
+  // Desktop drag-and-drop onto the same zone.
+  ["dragenter","dragover"].forEach(ev => zone.addEventListener(ev, e=>{ e.preventDefault(); zone.classList.add("drag"); }));
+  ["dragleave","drop"].forEach(ev => zone.addEventListener(ev, e=>{ e.preventDefault(); zone.classList.remove("drag"); }));
+  zone.addEventListener("drop", e=>{
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!f) return;
+    const dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; showFile(f);
+  });
+  document.getElementById("tDetails").addEventListener("input", clearHintError);
+  document.getElementById("submitReqBtn").addEventListener("click", ()=>{
+    rememberContact(document.getElementById("fContact").value.trim());
+    handleSubmitRequest();
+  });
+}
+function clearHintError(){ const h = document.getElementById("newReqHint"); if(h) h.classList.remove("error"); }
+
+/* ---- AI result / AI unsure (Figma 9:148 / 9:177) ---- */
+
+function resultBodyHtml(res){
+  const r = state.requests.find(x => x.id === res.id);
+  const routed = res.status === "routed" && res.type;
+  const typeName = res.type ? TYPE_LABEL[res.type] : null;
+  const head = routed
+    ? `<div class="result-band ok"><span aria-hidden="true">✓</span> Your form was identified</div>`
+    : `<div class="result-band unsure"><div class="t"><span aria-hidden="true">!</span> Registrar will confirm</div><div class="s">No action needed.</div></div>`;
+  const body = routed ? `
+      <div class="result-type">
+        <h2>${typeName}</h2>
+        <span class="pill soft">${res.confidence}% confidence</span>
+      </div>
+      <p class="result-sub">Routed to ${ROUTES[res.type][0]}.</p>
+      <div class="eyebrow-label">What happens next</div>
+      ${routeBarHtml(r || { route:ROUTES[res.type], hop:0, status:"routed" })}`
+    : `
+      <div class="suggest-card">
+        <div class="eyebrow-label tight">${typeName ? "Suggested type" : "AI result"}</div>
+        ${typeName
+          ? `<h2>${typeName}</h2><span class="pill amber">${res.confidence}% confidence</span><p>Needs staff confirmation</p>`
+          : `<h2>Not recognized yet</h2><p>The AI couldn't match this to one of the six forms DocuRoute handles. The Registrar will identify it.</p>`}
+      </div>
+      <p class="result-sub">${res.noInput ? "There was nothing for the AI to read, so the Registrar will check it."
+        : typeName ? "The AI wasn't sure enough (it needs 70%), so the Registrar will check the form and send it on."
+        : "Once identified, it's sent to the right office automatically."}</p>`;
+  return `
+    <section class="panel result-card">
+      ${head}
+      ${body}
+      <p class="result-track">Tracking ID&nbsp;&nbsp;<b>${res.id}</b></p>
+      <div class="result-actions">
+        <button class="btn" data-open="${res.id}">View request</button>
+        <button class="btn secondary" data-back>Back to requests</button>
+      </div>
+    </section>`;
+}
+
+function resultView(){
+  const routed = state.result.status === "routed";
+  return `
+    <header class="content-header">
+      <div class="eyebrow">${CURRENT_TERM.replace("/", "&nbsp;&nbsp;/&nbsp;&nbsp;")}</div>
+      <h1>Request received</h1>
+      <p>${routed ? "Your document is on its way." : "We've got your form."}</p>
+    </header>
+    <div class="content-body">${resultBodyHtml(state.result)}</div>`;
 }
 
 async function handleSubmitRequest(){
@@ -1710,7 +2383,9 @@ async function handleSubmitRequest(){
   // it at all. Staff capture always has a real photo (its file input isn't
   // optional in mobileCaptureHtml), so this only applies to students.
   if(!isStaffCapture && !file && !fields.details.trim()){
-    alert("Please attach a scanned/photographed form, or describe your request, before submitting.");
+    const hint = document.getElementById("newReqHint");
+    if(hint){ hint.textContent = "Please provide a photo or request details."; hint.classList.add("error"); document.getElementById("dropzone")?.focus(); }
+    else showToast("Attach a photo of your form, or describe your request, before submitting.", "warn");
     return;
   }
 
@@ -1738,7 +2413,7 @@ async function handleSubmitRequest(){
     // student (blind) submissions get run through
     // the real/simulated classifier.
     runAiPipeline(id, { file, text: fields.details, skipClassification: isStaffCapture });
-  }catch(e){ alert(e.message || "Could not reach Supabase."); renderRoot(); }
+  }catch(e){ showToast("Couldn't submit: " + (e.message || "can't reach the server."), "bad"); renderRoot(); }
 }
 function val(id){ const el = document.getElementById(id); return el ? el.value : ""; }
 
@@ -1765,6 +2440,7 @@ function runAiPipeline(id, ctx){
 }
 async function finishPipeline(id, ctx){
   ctx = ctx || {};
+  let outcome = null; // what the student's result screen shows
   try{
     // Nothing to actually classify -- handleSubmitRequest already blocks this
     // for a fresh submission, but this stays as a backstop: don't fake a
@@ -1823,6 +2499,7 @@ async function finishPipeline(id, ctx){
       return;
     }
 
+    outcome = { id, type, confidence, status, noInput };
     await addLog(id, noInput
       ? "AI Processing Layer: no file or description was attached - nothing to classify. Needs manual classification."
       : usedRealClassifier
@@ -1846,6 +2523,7 @@ async function finishPipeline(id, ctx){
       await addLog(id, `AI Processing Layer: could not save the classification result (${(e && e.message) || "unknown error"}) - needs manual classification.`);
       await sb.from("requests").update({ confidence:0, status:"unverified" }).eq("id", id).eq("status","submitted");
     }catch(e2){ /* nothing more we can do from here */ }
+    outcome = { id, type:null, confidence:0, status:"unverified", noInput:false };
   }
   await refresh();
   // A recovery sweep (recoverStuckSubmission) can call this for a request
@@ -1853,47 +2531,67 @@ async function finishPipeline(id, ctx){
   // detail modal for someone else's resolved submission.
   if(ctx.silent){ renderRoot(); return; }
   closeModal();
+  // Student: show the AI result / AI unsure page. Staff capture keeps the detail modal.
+  if(session && session.role === "student" && outcome){
+    state.newReq = false; state.detailId = null; state.result = outcome;
+    renderRoot(); window.scrollTo(0, 0); return;
+  }
   renderRoot();
   openDetail(id);
 }
 
 /* ---------------- Staff / Dean actions ---------------- */
 
+// These used to swallow errors silently (catch(e){}); a failed write now shows
+// a toast, and a successful one confirms what happened.
 async function confirmAndRoute(id){
   try{
     const req = state.requests.find(r=>r.id===id);
     await addLog(id, `Intake clerk manually confirmed the document type - routed to ${req.route[0]}.`);
-    await sb.from("requests").update({ status:"routed" }).eq("id", id);
+    const { error } = await sb.from("requests").update({ status:"routed" }).eq("id", id);
+    if(error) throw error;
     await refresh();
-  }catch(e){}
+    showToast(`${id} confirmed — routed to ${req.route[0]}.`, "good");
+  }catch(e){ showToast("Couldn't route " + id + ": " + (e.message || "can't reach the server."), "bad"); }
   renderRoot();
 }
 async function advanceRequest(id){
   try{
     const req = state.requests.find(r=>r.id===id);
+    let update, done;
     if(req.status === "routed"){
       await addLog(id, `${req.route[req.hop]} marked the request In Progress.`);
-      await sb.from("requests").update({ status:"progress" }).eq("id", id);
+      update = { status:"progress" }; done = `${id} marked in progress.`;
     } else if(req.hop < req.route.length - 1){
       await addLog(id, `${req.route[req.hop]} cleared the request - forwarded to ${req.route[req.hop+1]}.`);
-      await sb.from("requests").update({ status:"routed", hop: req.hop+1 }).eq("id", id);
+      update = { status:"routed", hop: req.hop+1 }; done = `${id} cleared — sent to ${req.route[req.hop+1]}.`;
     } else {
       await addLog(id, `${req.route[req.hop]} gave final approval. Audit trail closed.`);
-      await sb.from("requests").update({ status:"completed" }).eq("id", id);
+      update = { status:"completed" }; done = `${id} approved — request completed.`;
     }
+    const { error } = await sb.from("requests").update(update).eq("id", id);
+    if(error) throw error;
     await refresh();
-  }catch(e){}
+    showToast(done, "good");
+  }catch(e){ showToast("Couldn't update " + id + ": " + (e.message || "can't reach the server."), "bad"); }
   renderRoot();
 }
 async function declineRequest(id){
-  const reason = prompt("Reason for declining this request:", "Incomplete requirements attached.");
-  if(reason===null) return;
+  const { ok, reason } = await confirmDialog({
+    title:`Decline ${id}?`,
+    body:"The request closes at this office and the student is told why.",
+    confirmLabel:"Decline request", danger:true,
+    reason:{ label:"Reason for declining", placeholder:"e.g. Incomplete requirements attached." }
+  });
+  if(!ok) return;
   try{
     const req = state.requests.find(r=>r.id===id);
     await addLog(id, `${req.route[req.hop]} declined the request - reason: '${reason}'.`);
-    await sb.from("requests").update({ status:"declined" }).eq("id", id);
+    const { error } = await sb.from("requests").update({ status:"declined" }).eq("id", id);
+    if(error) throw error;
     await refresh();
-  }catch(e){}
+    showToast(`${id} declined.`, "info");
+  }catch(e){ showToast("Couldn't decline " + id + ": " + (e.message || "can't reach the server."), "bad"); }
   renderRoot();
 }
 
@@ -1926,6 +2624,10 @@ function routeListHtml(req){
 }
 
 function openDetail(id){
+  // Students get the full-page detail (Figma 9:200 / 9:240); staff keep the modal for now.
+  if(session && session.role === "student"){
+    state.detailId = id; renderRoot(); window.scrollTo(0, 0); return;
+  }
   const req = state.requests.find(r=>r.id===id);
   const modal = document.getElementById("modal");
   modal.innerHTML = `
@@ -1967,7 +2669,7 @@ function openDetail(id){
           ${req.log.map(l=>`
             <div class="tl-item">
               <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
-              <div class="tl-body"><div class="txt">${l.text}</div><div class="ts">${fmtTs(l.ts)}</div></div>
+              <div class="tl-body"><div class="txt">${esc(l.text)}</div><div class="ts">${fmtTs(l.ts)}</div></div>
             </div>`).join("")}
         </div>
       </div>
@@ -1984,7 +2686,7 @@ function openDetail(id){
   if(viewDocBtn) viewDocBtn.addEventListener("click", async ()=>{
     const { data, error } = await sb.storage.from("documents").createSignedUrl(req.documentPath, 60);
     if(!error && data && data.signedUrl) window.open(data.signedUrl, "_blank");
-    else alert("Could not load the attached document.");
+    else showToast("Couldn't open the attached form. Try again in a moment.", "bad");
   });
 }
 
@@ -2013,8 +2715,14 @@ function wireCommonActions(){
   if(newBtn) newBtn.addEventListener("click", openNewRequestModal);
   const resetBtn = document.getElementById("resetBtn");
   if(resetBtn) resetBtn.addEventListener("click", async ()=>{
-    if(!confirm("Reset the demo requests? This clears every request in the shared Supabase project. Accounts are kept.")) return;
-    try{ await resetDemoRequests(); await refresh(); }catch(e){ alert(e.message || "Could not reach Supabase to reset it."); }
+    const { ok } = await confirmDialog({
+      title:"Reset demo requests?",
+      body:"This clears every request in the shared Supabase project and re-seeds the four demo requests. Accounts are kept.",
+      confirmLabel:"Reset", danger:true
+    });
+    if(!ok) return;
+    try{ await resetDemoRequests(); await refresh(); showToast("Demo requests reset.", "good"); }
+    catch(e){ showToast("Couldn't reset: " + (e.message || "can't reach the server."), "bad"); }
     renderRoot();
   });
   const newAcctBtn = document.getElementById("newAcctBtn");
